@@ -15,9 +15,9 @@ Units must be provisioned with [critical datum](https://github.com/rpj/zw/blob/m
 
 To do so, fill in the aforementioned fields appropriately, set [`ZERO_WATCH_PROVISIONING_MODE` to `1`](https://github.com/rpj/zw/blob/master/zw_provision.h#L7) and upload to your ESP32 while monitoring serial (at [this baud rate](https://github.com/rpj/zw/blob/master/zero_watch.ino#L22)). There are wait-points that allow you to remove power for the unit before data is written.
 
-Most critical of these are the [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10) value, which is limited to 32 characters in length and *must be unique across your network*.
+Most critical of these are the [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10) value, which is limited to 32 characters in length and *must be unique across your network*. All references to `HOSTNAME` elsewhere in this document refer to this data.
 
-Once provisioned, unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash.
+Once provisioned units will halt forever, so to return them to normal: unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash. That's it!
 
 ## Configuration
 
@@ -26,3 +26,20 @@ Most of the behavior, save for the [display specifications]() (which will one da
 Specifically, a [number of fields](https://github.com/rpj/zw/blob/master/zw_common.h#L7-L13) are exposed as `HOSTNAME:config:*` keys for which any written (valid) value [will be honored](https://github.com/rpj/zw/blob/master/zero_watch.ino#L264-L295) on the next refresh cycle.
 
 There is also a [control point](https://github.com/rpj/zw/blob/master/zero_watch.ino#L134) key at `HOSTNAME:config:controlPoint`, a [metadata getter](https://github.com/rpj/zw/blob/master/zero_watch.ino#L73) at `HOSTNAME:config:getValue` and the [OTA update configuration](https://github.com/rpj/zw/blob/master/zero_watch.ino#L185) key at `HOSTNAME:config:update`.
+
+## OTA
+
+Set [`ZWPROV_OTA_HOST`](https://github.com/rpj/zw/blob/master/zw_provision.h#L16) when provisioning to an HTTP (only, currently) host visible to the unit and this will be combined with the update metadata's `url` component [to produce the fully-qualified URL](X) for acquisition of the update binary.
+
+The aforementioned metadata is written to `HOSTNAME:config:update` as as JSON object consisting of: `url`, `md5`, `size`, and `otp` (a ["one-time password"](https://github.com/rpj/zw/blob/master/zw_otp.cpp)), e.g.:
+
+```js
+{
+    "url":  "zero_watch_updates/zero_watch-v0.2.0.6.ino.bin",
+    "md5":  "1a6f92066b6e3a63362c6b376fbc438d",
+    "size": 924960,
+    "otp": 123
+}
+```
+
+Monitor serial or Redis (depending on `HOSTNAME:config:publishLogs`) for logging.
