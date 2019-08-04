@@ -23,7 +23,7 @@ To do so, fill in the aforementioned fields appropriately, set [`ZERO_WATCH_PROV
 
 Most critical of these values is [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10), which is limited to 32 characters in length and *must be unique across your network*. All references to `HOSTNAME` elsewhere in this document refer to this data.
 
-Once provisioned, the unit will halt forever, so to return it to normal behavior: unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash. That's it!
+Once provisioned, the unit will halt forever, so to return it to normal behavior: unset `ZERO_WATCH_PROVISIONING_MODE` and all `ZWPROV_*` fields, rebuild and reflash. That's it!
 
 ## Configuration
 
