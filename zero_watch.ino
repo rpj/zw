@@ -5,7 +5,6 @@
 #include <WiFiClient.h>
 #include <WiFi.h>
 #include <Update.h>
-#include <HTTPClient.h>
 #include <Redis.h>
 #include <TM1637Display.h>
 #include <ArduinoJson.h>
@@ -17,9 +16,8 @@
 #include "zw_provision.h"
 #include "zw_displays.h"
 #include "zw_otp.h"
+#include "zw_ota.h"
 
-#define OTA_RESET_DELAY 5
-#define OTA_UPDATE_PRCNT_REPORT 10
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
 #define DEF_BRIGHT 0
@@ -179,79 +177,9 @@ bool processControlPoint(String &imEmit, ZWRedisResponder &responder)
     return true;
 }
 
-void updateProg(size_t s1, size_t s2)
+bool updateCompletedCallback()
 {
-    static int lastUpdate = 0;
-    auto curPercent = ((double)s1 / s2) * 100.0;
-    if ((unsigned)curPercent >= lastUpdate + OTA_UPDATE_PRCNT_REPORT)
-    {
-        lastUpdate = (unsigned)curPercent;
-        dprint("%d.. %s", lastUpdate, (lastUpdate == 100 ? "\n" : ""));
-        zlog("OTA update progress: %0.2f%% (%d)\n", curPercent, s1);
-    }
-}
-
-bool runUpdate(const char *url, const char *md5, size_t sizeInBytes)
-{
-    HTTPClient http;
-    if (http.begin(url))
-    {
-        auto code = http.GET();
-        if (code > 0)
-        {
-            auto dataStream = http.getStream();
-            auto avail = dataStream.available();
-            if (avail == 0)
-            {
-                zlog("ERROR: no bytes available!\n");
-                return false;
-            }
-
-            if (Update.begin(sizeInBytes))
-            {
-                Update.onProgress(updateProg);
-                Update.setMD5(md5);
-                dprint("OTA start szb=%d\n", sizeInBytes);
-                auto updateTook = Update.writeStream(dataStream);
-                if (updateTook == sizeInBytes && !Update.hasError())
-                {
-                    if (!gRedis->postCompletedUpdate())
-                    {
-                        zlog("WARNING: unable to delete update key!\n");
-                    }
-
-                    if (!Update.end())
-                    {
-                        zlog("UPDATE END FAILED!? WTF mate\n");
-                        Update.abort();
-                        return false;
-                    }
-
-                    return true;
-                }
-                else
-                {
-                    zlog("UPDATE FAILED: %d\n", Update.getError());
-                    Update.abort();
-                }
-            }
-            else
-            {
-                zlog("UPDATE couldn't start: %d\n", Update.getError());
-                Update.abort();
-            }
-        }
-        else
-        {
-            zlog("HTTPClient.get() failed: %d\n", code);
-        }
-    }
-    else
-    {
-        zlog("HTTPClient.begin() failed\n");
-    }
-
-    return false;
+    return gRedis->postCompletedUpdate();
 }
 
 bool processUpdate(String &updateJson, ZWRedisResponder &responder)
@@ -285,7 +213,7 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
 
             zlog("Starting OTA update of %0.2fKB\n", (szb / 1024.0));
             zlog("Image source (md5=%s):\n\t%s\n", md5, fqUrl);
-            if (runUpdate(fqUrl, md5, szb))
+            if (runUpdate(fqUrl, md5, szb, []() { return gRedis->postCompletedUpdate(); }))
             {
                 zlog("OTA update wrote successfully! Restarting in %d seconds...\n", OTA_RESET_DELAY);
                 delay(OTA_RESET_DELAY * 1000);
