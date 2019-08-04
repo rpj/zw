@@ -9,6 +9,12 @@ Currently running things like [this](https://twitter.com/rpjios/status/115560935
 ![version 2](https://pbs.twimg.com/media/EAmMSaPVUAEKYcl?format=jpg&name=small)
 ![version 1](https://pbs.twimg.com/media/D0RCGcvVAAArx5x?format=jpg&name=small)
 
+## Dependencies
+
+* [ArduinoJson](https://arduinojson.org/) **version 5**
+* [avishorp's TM1637 driver](https://github.com/avishorp/TM1637)
+* [Arduino-Redis](http://arduino-redis.com/) version [2.1.1](https://github.com/electric-sheep-co/arduino-redis/releases/tag/2.1.1) or later
+
 ## Provisioning
 
 Units must be provisioned with [critical datum](https://github.com/rpj/zw/blob/master/zw_provision.h#L10-L16), written to EEPROM, before they will behave correctly.
@@ -43,3 +49,5 @@ The aforementioned metadata must be written to `HOSTNAME:config:update` as as JS
 ```
 
 On the next refresh cycle, this data will be picked up and acted upon. Monitor serial or Redis (depending on `HOSTNAME:config:publishLogs`) for logging. Upon successful update, the unit will delete `HOSTNAME:config:update` and reset to the new software (after a [small, build-time configurable delay](https://github.com/rpj/zw/blob/master/zw_ota.h#L6)).
+
+Pre-built images of recent versions are available [here](https://ota.rpjios.com/), but only via HTTPS so as to be unuseable as `ZWPROV_OTA_HOST`. It's highly advised you stand up your OTA within your local network, anyway! :smile:
