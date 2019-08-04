@@ -15,7 +15,7 @@ Units must be provisioned with [critical datum](https://github.com/rpj/zw/blob/m
 
 To do so, fill in the aforementioned fields appropriately, set [`ZERO_WATCH_PROVISIONING_MODE` to `1`](https://github.com/rpj/zw/blob/master/zw_provision.h#L7) and upload to your ESP32 while monitoring serial (at [this baud rate](https://github.com/rpj/zw/blob/master/zero_watch.ino#L22)). There are wait-points that allow you to remove power for the unit before data is written.
 
-Most critical of these values is the [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10) value, which is limited to 32 characters in length and *must be unique across your network*. All references to `HOSTNAME` elsewhere in this document refer to this data.
+Most critical of these values is [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10), which is limited to 32 characters in length and *must be unique across your network*. All references to `HOSTNAME` elsewhere in this document refer to this data.
 
 Once provisioned units will halt forever, so to return them to normal: unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash. That's it!
 
