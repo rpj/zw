@@ -31,6 +31,7 @@ bool ZWRedis::connect()
     return true;
 }
 
+extern int _last_free;
 void ZWRedis::checkin(
     unsigned long ticks,
     const char* localIp,
@@ -45,12 +46,18 @@ void ZWRedis::checkin(
     connection.redis->hset(key, "host", hostname.c_str());
     connection.redis->hset(key, "up", String(ticks).c_str());
     connection.redis->hset(key, "ver", ZEROWATCH_VER);
-    char _ifbuf[1024];
-    bzero(_ifbuf, 1024);
-    snprintf(_ifbuf, 1024,
+
+#define BL 1024
+    auto cur_free = ESP.getFreeHeap();
+    char _ifbuf[BL];
+    bzero(_ifbuf, BL);
+    snprintf(_ifbuf, BL,
              "{ \"wifi\": { \"address\": \"%s\", \"latency\": "
-             "{ \"immediate\": %ld, \"rollingAvg\": %ld }}}",
-             localIp, immediateLatency, averageLatency);
+             "{ \"immediate\": %ld, \"rollingAvg\": %ld } },"
+             " \"mem\": { \"current\": %d, \"last\": %d, \"delta\": %d, \"heap\": %d }"
+             "}",
+             localIp, immediateLatency, averageLatency,
+             cur_free, _last_free, cur_free - _last_free, ESP.getHeapSize());
     connection.redis->hset(key, "ifaces", _ifbuf);
     connection.redis->expire(key, expireMessage);
 }
