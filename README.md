@@ -17,11 +17,11 @@ To do so, fill in the aforementioned fields appropriately, set [`ZERO_WATCH_PROV
 
 Most critical of these values is [hostname](https://github.com/rpj/zw/blob/master/zw_provision.h#L10), which is limited to 32 characters in length and *must be unique across your network*. All references to `HOSTNAME` elsewhere in this document refer to this data.
 
-Once provisioned units will halt forever, so to return them to normal: unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash. That's it!
+Once provisioned, the unit will halt forever, so to return it to normal behavior: unset `ZERO_WATCH_PROVISIONING_MODE`, rebuild and reflash. That's it!
 
 ## Configuration
 
-Most of the behavior, save for the [display specifications]() (which will one day be configurable as well), is configurable at runtime via the Redis instance the unit connects to.
+Most of the behavior, save for the [display specifications](https://github.com/rpj/zw/blob/master/zw_displays.cpp#L67-L78) (which will one day be configurable as well), is configurable at runtime via the Redis instance the unit connects to.
 
 Specifically, a [number of fields](https://github.com/rpj/zw/blob/master/zw_common.h#L7-L13) are exposed as `HOSTNAME:config:*` keys for which any written (valid) value [will be honored](https://github.com/rpj/zw/blob/master/zero_watch.ino#L264-L295) on the next refresh cycle.
 
@@ -31,7 +31,7 @@ There is also a [control point](https://github.com/rpj/zw/blob/master/zero_watch
 
 Set [`ZWPROV_OTA_HOST`](https://github.com/rpj/zw/blob/master/zw_provision.h#L16) when provisioning to an HTTP (only, currently) host visible to the unit and this will be combined with the update metadata's `url` component [to produce the fully-qualified URL](X) for acquisition of the update binary.
 
-The aforementioned metadata is written to `HOSTNAME:config:update` as as JSON object consisting of: `url`, `md5`, `size`, and `otp` (a ["one-time password"](https://github.com/rpj/zw/blob/master/zw_otp.cpp)), e.g.:
+The aforementioned metadata must be written to `HOSTNAME:config:update` as as JSON object consisting of: `url`, `md5`, `size`, and `otp` (a ["one-time password"](https://github.com/rpj/zw/blob/master/zw_otp.cpp)), e.g.:
 
 ```js
 {
@@ -42,4 +42,4 @@ The aforementioned metadata is written to `HOSTNAME:config:update` as as JSON ob
 }
 ```
 
-Monitor serial or Redis (depending on `HOSTNAME:config:publishLogs`) for logging.
+On the next refresh cycle, this data will be picked up and acted upon. Monitor serial or Redis (depending on `HOSTNAME:config:publishLogs`) for logging. Upon successful update, the unit will delete `HOSTNAME:config:update` and reset to the new software (after a [small, build-time configurable delay](https://github.com/rpj/zw/blob/master/zw_ota.h#L6)).
