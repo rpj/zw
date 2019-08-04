@@ -171,9 +171,9 @@ bool ZWRedis::clearControlPoint()
 
 void ZWRedisResponder::setValue(const char *format, ...)
 {
-#define BUFLEN 1024
-    char _buf[1024];
-    bzero(_buf, 1024);
+#define BUFLEN 2048
+    char _buf[BUFLEN];
+    bzero(_buf, BUFLEN);
     va_list args;
     va_start(args, format);
     vsnprintf(_buf, BUFLEN, format, args);

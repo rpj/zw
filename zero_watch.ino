@@ -1,14 +1,10 @@
 // zero_watch.ino
-// (C) Ryan Joseph, 2019 <ryan@electricsheep.co>
+// (C) 2019 Ryan Joseph <ryan@electricsheep.co>
+// https://github.com/rpj/zw
 
-// TODO: trim these!
-#include <WiFiClient.h>
 #include <WiFi.h>
 #include <Update.h>
-#include <Redis.h>
-#include <TM1637Display.h>
 #include <ArduinoJson.h>
-#include <EEPROM.h>
 
 #include "zw_common.h"
 #include "zw_logging.h"
@@ -105,7 +101,8 @@ bool processGetValue(String &imEmit, ZWRedisResponder &responder)
     }
     else if (imEmit.equals("latency"))
     {
-        responder.setValue("{ \"immediate\": %d, \"rollingAvg\": %d }", immediateLatency, gUDRA);
+        responder.setValue("{ \"immediate\": %d, \"rollingAvg\": %d }", 
+            immediateLatency, gUDRA);
     }
     else
     {
@@ -177,11 +174,6 @@ bool processControlPoint(String &imEmit, ZWRedisResponder &responder)
     return true;
 }
 
-bool updateCompletedCallback()
-{
-    return gRedis->postCompletedUpdate();
-}
-
 bool processUpdate(String &updateJson, ZWRedisResponder &responder)
 {
     JsonObject &updateObj = jsonBuf.parseObject(updateJson.c_str());
@@ -213,9 +205,12 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
 
             zlog("Starting OTA update of %0.2fKB\n", (szb / 1024.0));
             zlog("Image source (md5=%s):\n\t%s\n", md5, fqUrl);
-            if (runUpdate(fqUrl, md5, szb, []() { return gRedis->postCompletedUpdate(); }))
+
+            if (runUpdate(fqUrl, md5, szb, 
+                []() { return gRedis->postCompletedUpdate(); }))
             {
-                zlog("OTA update wrote successfully! Restarting in %d seconds...\n", OTA_RESET_DELAY);
+                zlog("OTA update wrote successfully! Restarting in %d seconds...\n", 
+                    OTA_RESET_DELAY);
                 delay(OTA_RESET_DELAY * 1000);
                 ESP.restart();
                 return true; // never reached
@@ -314,7 +309,8 @@ void heartbeat()
 
         if ((__hb_count++ % HB_CHECKIN))
         {
-            gRedis->checkin(__lc, WiFi.localIP().toString().c_str(), immediateLatency, gUDRA, gConfig.refresh * 5);
+            gRedis->checkin(__lc, WiFi.localIP().toString().c_str(), 
+                immediateLatency, gUDRA, gConfig.refresh * 5);
         }
     }
 }
