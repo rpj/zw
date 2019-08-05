@@ -30,14 +30,18 @@ ZWAppConfig gConfig = {
     .debug = DEBUG,
     .publishLogs = false,
     .pauseRefresh = false};
-ZWRedis *gRedis;
-DisplaySpec *gDisplays;
+ZWRedis *gRedis = NULL;
+DisplaySpec *gDisplays = NULL;
 void (*gPublishLogsEmit)(const char *fmt, ...);
-unsigned long __lc = 0;
+unsigned long long gSecondsSinceBoot = 0;
+unsigned long long gLastRefreshTick = 0;
 int _last_free = 0;
 unsigned long gUDRA = 0;
 unsigned long immediateLatency = 0;
 StaticJsonBuffer<1024> jsonBuf;
+hw_timer_t *__isrTimer = NULL;
+portMUX_TYPE __isrMutex = portMUX_INITIALIZER_UNLOCKED;
+volatile unsigned long __isrCount = 0;
 
 bool wifi_init()
 {
@@ -174,6 +178,12 @@ bool processControlPoint(String &imEmit, ZWRedisResponder &responder)
     return true;
 }
 
+void preUpdateIRQDisableFunc()
+{
+    zlog("preUpdateIRQDisableFunc disabling __isrTimer\n");
+    timerEnd(__isrTimer);
+}
+
 bool processUpdate(String &updateJson, ZWRedisResponder &responder)
 {
     JsonObject &updateObj = jsonBuf.parseObject(updateJson.c_str());
@@ -206,7 +216,7 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
             zlog("Starting OTA update of %0.2fKB\n", (szb / 1024.0));
             zlog("Image source (md5=%s):\n\t%s\n", md5, fqUrl);
 
-            if (runUpdate(fqUrl, md5, szb, 
+            if (runUpdate(fqUrl, md5, szb, preUpdateIRQDisableFunc,
                 []() { return gRedis->postCompletedUpdate(); }))
             {
                 zlog("OTA update wrote successfully! Restarting in %d seconds...\n", 
@@ -309,7 +319,7 @@ void heartbeat()
 
         if ((__hb_count++ % HB_CHECKIN))
         {
-            gRedis->checkin(__lc, WiFi.localIP().toString().c_str(), 
+            gRedis->checkin(gSecondsSinceBoot, WiFi.localIP().toString().c_str(), 
                 immediateLatency, gUDRA, gConfig.refresh * 5);
         }
     }
@@ -321,7 +331,7 @@ void tick(bool forceUpdate = false)
         if (!forceUpdate)
             return;
 
-    zlog("Awake at us=%lu tick=%ld\n", micros(), __lc);
+    zlog("Awake at us=%lu tick=%lld\n", micros(), gSecondsSinceBoot);
 
     for (DisplaySpec *w = gDisplays; w->clockPin != -1 && w->dioPin != -1; w++)
         updateDisplay(w);
@@ -329,23 +339,30 @@ void tick(bool forceUpdate = false)
     _last_free = ESP.getFreeHeap();
 }
 
+void __isr()
+{
+    portENTER_CRITICAL(&__isrMutex);
+    ++__isrCount;
+    portEXIT_CRITICAL(&__isrMutex);
+}
+
 void loop()
 {
-    if (!(__lc++ % gConfig.refresh))
+    if (__isrCount) {
+        portENTER_CRITICAL(&__isrMutex);
+        --__isrCount;
+        portEXIT_CRITICAL(&__isrMutex);
+        ++gSecondsSinceBoot;
+        dprint("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
+    }
+    
+    if (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot)
     {
+        gLastRefreshTick = gSecondsSinceBoot;
         readConfigAndUserKeys();
         heartbeat();
         tick();
     }
-
-    if (!(__lc % 5))
-    {
-        blink(15);
-        delay(5);
-        blink(15);
-    }
-    dprint("%c%s", !(__lc % 5) ? '|' : '.', __lc % gConfig.refresh ? "" : "\n");
-    delay(900);
 }
 
 void setup()
@@ -376,13 +393,8 @@ void setup()
         if (gRedis->connect())
         {
             zlog("Redis connection established, reading config...\n");
+            
             readConfigAndUserKeys();
-
-            if (gConfig.pauseRefresh)
-            {
-                zlog("Running tick 0 forcefully because refresh is paused at init\n");
-                tick(true);
-            }
 
             zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
 
@@ -391,8 +403,15 @@ void setup()
 
             gPublishLogsEmit = redis_publish_logs_emit;
 
+            __isrTimer = timerBegin(0, 80, true);
+            timerAttachInterrupt(__isrTimer, &__isr, true);
+            timerAlarmWrite(__isrTimer, 1000000, true);
+            timerAlarmEnable(__isrTimer);
+
             zlog("Boot count: %d\n", gRedis->incrementBootcount());
             zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
+
+            tick(true);
         }
         else
         {
