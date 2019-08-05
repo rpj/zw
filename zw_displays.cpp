@@ -16,13 +16,11 @@ struct AnimStep
     int bits;
 };
 
-AnimStep full_loop[] = {{0, 1}, {1, 1}, {2, 1}, {3, 1}, {3, 3}, {3, 7}, {3, 15}, {2, 9}, 
-    {1, 9}, {0, 9}, {0, 25}, {0, 57}, {-1, -1}};
+AnimStep full_loop[] = {{0, 1}, {1, 1}, {2, 1}, {3, 1}, {3, 3}, {3, 7}, {3, 15}, {2, 9}, {1, 9}, {0, 9}, {0, 25}, {0, 57}, {-1, -1}};
 
-AnimStep light_loop[] = {{0, 1}, {1, 1}, {2, 1}, {3, 1}, {3, 2}, {3, 4}, {3, 8}, {2, 8}, 
-    {1, 8}, {0, 8}, {0, 16}, {0, 32}, {-1, -1}};
+AnimStep light_loop[] = {{0, 1}, {1, 1}, {2, 1}, {3, 1}, {3, 2}, {3, 4}, {3, 8}, {2, 8}, {1, 8}, {0, 8}, {0, 16}, {0, 32}, {-1, -1}};
 
-void __runAnimation(TM1637Display *d, AnimStep* anim, bool cE = false, int s = 0)
+void __runAnimation(TM1637Display *d, AnimStep *anim, bool cE = false, int s = 0)
 {
     uint8_t v[] = {0, 0, 0, 0};
     for (AnimStep *w = anim; w->bits != -1 && w->digit != -1; w++)
@@ -77,7 +75,11 @@ DisplaySpec gDisplays_EZERO[] = {
     {13, 14, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
-DisplaySpec* zwdisplayInit(String& hostname)
+DisplaySpec gDisplays_ETEST[] = {
+    {26, 25, nullptr, {"zed:sensor:SPS30:mc_2p5:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
+    {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
+
+DisplaySpec *zwdisplayInit(String &hostname)
 {
     DisplaySpec *retSpec = NULL;
 
@@ -89,29 +91,34 @@ DisplaySpec* zwdisplayInit(String& hostname)
     {
         retSpec = gDisplays_AMINI;
     }
-    else
+    else if (hostname.equals("etest"))
     {
-        zlog("BAD HOSTNAME!\n");
-        return NULL;
+        retSpec = gDisplays_ETEST;
     }
-    
-    auto spec = retSpec;
-    zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
-    for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
-    {
-        zlog("Setting up display #%d with clock=%d DIO=%d\n",
-             (int)(spec - retSpec), spec->clockPin, spec->dioPin);
-        spec->disp = new TM1637Display(spec->clockPin, spec->dioPin);
-        spec->disp->clear();
-        spec->disp->setBrightness(gConfig.brightness);
-        __runAnimation(spec->disp, full_loop, false, 5);
+    else {
+        zlog("zwdisplayInit: ERROR unconfigured hostname '%s'\n", hostname.c_str());
     }
 
-    if (gConfig.debug)
+    if (retSpec)
     {
-        EXEC_ALL_DISPS(retSpec, showNumberDecEx((int)(walk - retSpec), 0,
-            false, 4 - (int)(walk - retSpec), (int)(walk - retSpec)));
-        delay(2000);
+        auto spec = retSpec;
+        zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
+        for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
+        {
+            zlog("Setting up display #%d with clock=%d DIO=%d\n",
+                 (int)(spec - retSpec), spec->clockPin, spec->dioPin);
+            spec->disp = new TM1637Display(spec->clockPin, spec->dioPin);
+            spec->disp->clear();
+            spec->disp->setBrightness(gConfig.brightness);
+            __runAnimation(spec->disp, full_loop, false, 5);
+        }
+
+        if (gConfig.debug)
+        {
+            EXEC_ALL_DISPS(retSpec, showNumberDecEx((int)(walk - retSpec), 0,
+                                                    false, 4 - (int)(walk - retSpec), (int)(walk - retSpec)));
+            delay(2000);
+        }
     }
 
     return retSpec;
@@ -164,15 +171,18 @@ void blink(int d)
 
 void runAnimation(TM1637Display *d, String animation, bool cE, int s)
 {
-    AnimStep* anim = NULL;
+    AnimStep *anim = NULL;
 
-    if (animation.equals("full_loop")) {
+    if (animation.equals("full_loop"))
+    {
         anim = full_loop;
     }
-    else if (animation.equals("light_loop")) {
+    else if (animation.equals("light_loop"))
+    {
         anim = light_loop;
     }
-    else {
+    else
+    {
         zlog("No animation defined for '%s'!\n", animation.c_str());
         return;
     }
@@ -180,11 +190,11 @@ void runAnimation(TM1637Display *d, String animation, bool cE, int s)
     __runAnimation(d, anim, cE, s);
 }
 
-#define EXEC_WITH_EACH_DISP(DISPLIST_START, EFUNC)                                                              \
-    do                                                                                          \
-    {                                                                                           \
+#define EXEC_WITH_EACH_DISP(DISPLIST_START, EFUNC)                                                   \
+    do                                                                                               \
+    {                                                                                                \
         for (DisplaySpec *walk = DISPLIST_START; walk->clockPin != -1 && walk->dioPin != -1; walk++) \
-            EFUNC(walk->disp);                                                                  \
+            EFUNC(walk->disp);                                                                       \
     } while (0)
 
 void demoForDisp(TM1637Display *disp)
@@ -196,7 +206,7 @@ void demoForDisp(TM1637Display *disp)
     __runAnimation(disp, full_loop);
 }
 
-void demoMode(DisplaySpec* displayListStart)
+void demoMode(DisplaySpec *displayListStart)
 {
     dprint("Demo! Bleep bloop!\n");
     zlog("Demo! Bleep bloop!\n");

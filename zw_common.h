@@ -1,10 +1,11 @@
 #ifndef __ZW_COMMON__H__
 #define __ZW_COMMON__H__
 
-#define ZEROWATCH_VER   "0.2.1.7"
-#define DEBUG           1
+#define ZEROWATCH_VER "0.2.2.0"
+#define DEBUG 1
 
-struct ZWAppConfig {
+struct ZWAppConfig
+{
     int brightness;
     int refresh;
     bool debug;
@@ -14,14 +15,14 @@ struct ZWAppConfig {
 
 void __haltOrCatchFire();
 
-#define zwassert(cond)                                  \
-    do                                                  \
-    {                                                   \
-        if (!(cond))                                    \
-        {                                               \
-            Serial.printf("ZWASSERT AT %d\n", __LINE__); \
-            __haltOrCatchFire();                        \
-        }                                               \
+#define zwassert(cond)                                                                      \
+    do                                                                                      \
+    {                                                                                       \
+        if (!(cond))                                                                        \
+        {                                                                                   \
+            Serial.printf("ZWASSERT IN %s() AT %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
+            __haltOrCatchFire();                                                            \
+        }                                                                                   \
     } while (0)
 
 #endif

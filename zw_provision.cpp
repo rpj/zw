@@ -87,11 +87,18 @@ bool checkUnitProvisioning()
 {
     auto eeHnLength = EEPROM.readBytes(ZW_EEPROM_HOSTNAME_ADDR, __hnShadowBuf, ZW_EEPROM_SIZE);
 
-    if (!eeHnLength)
+    if (!eeHnLength || eeHnLength > ZW_EEPROM_SIZE)
         return false;
 
     gHostname = String(__hnShadowBuf);
-    dprint("EEPROM HOSTNAME %s\n", gHostname.c_str());
+
+    // it's possible for eeHnLength to be valid while the hostname itself
+    // contains garbade data, in which case gHostname may have length
+    // larger than the allowed size
+    if (gHostname.length() > ZW_EEPROM_SIZE)
+        return false;
+
+    dprint("EEPROM HOSTNAME (%db, %db) %s\n", eeHnLength, gHostname.length(), gHostname.c_str());
 
     CFG_EEPROM_read();
 
@@ -213,12 +220,12 @@ void verifyProvisioning()
 
     if (!checkUnitProvisioning())
     {
-        zlog("ERROR: This device is not provisioned! Cannot continue, halting forever.\n");
+        zlog("\n\nThis device is not provisioned! Please use ZEROWATCH_PROVISIONING_MODE to initialize it.");
         __haltOrCatchFire();
     }
 
     // TODO: better place for this? I'm sure there is one...
-    if (!(gHostname.equals("ezero") || gHostname.equals("amini")))
+    if (!(gHostname.equals("ezero") || gHostname.equals("amini") || gHostname.equals("etest")))
     {
         zlog("ERROR: Unrecognized hostname '%s', halting forever!\n", __hnShadowBuf);
         __haltOrCatchFire();
