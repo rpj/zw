@@ -267,38 +267,50 @@ void redis_publish_logs_emit(const char *fmt, ...)
 void readConfigAndUserKeys()
 {
     auto curCfg = gRedis->readConfig();
+    bool dirty = false;
 
-    if (curCfg.brightness >= 0 && curCfg.brightness < 8 &&
-        curCfg.brightness != gConfig.brightness)
-    {
-        zlog("Read new brightness level: %d\n", curCfg.brightness);
-        gConfig.brightness = curCfg.brightness;
-        EXEC_ALL_DISPS(gDisplays, setBrightness(gConfig.brightness));
+#define UPDATE_IF_CHANGED(field) \
+    if (curCfg.field != gConfig.field) \
+    { \
+        zlog("[Config] %s -> %d\n", #field, curCfg.field); \
+        gConfig.field = curCfg.field; \
     }
 
-    if (curCfg.refresh >= 5 && curCfg.refresh != gConfig.refresh)
-    {
-        zlog("Read new refresh rate: %d\n", curCfg.refresh);
-        gConfig.refresh = curCfg.refresh;
+#define UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, extraIfUpdated) \
+    if ((extraCond) && curCfg.field != gConfig.field) \
+    { \
+        zlog("[Config] %s -> %d\n", #field, curCfg.field); \
+        gConfig.field = curCfg.field; \
+        extraIfUpdated; \
+    } \
+    else if (!(extraCond)) \
+    { \
+        zlog("Redis has invalid %s configuration, %d: correcting to %d\n", \
+            #field, curCfg.field, gConfig.field); \
+        curCfg.field = gConfig.field; \
+        dirty = true; \
     }
 
-    if (curCfg.debug != gConfig.debug)
-    {
-        zlog("Read new debug setting: %sabled\n", curCfg.debug ? "en" : "dis");
-        gConfig.debug = curCfg.debug;
-    }
+#define UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(field, extraCond) \
+    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, do{}while(0))
 
-    if (curCfg.publishLogs != gConfig.publishLogs)
-    {
-        zlog("Read new publishLogs setting: %sabled\n", curCfg.publishLogs ? "en" : "dis");
-        gConfig.publishLogs = curCfg.publishLogs;
-    }
+    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
+        curCfg.brightness >= 0 && curCfg.brightness < 8,
+        EXEC_ALL_DISPS(gDisplays, setBrightness(gConfig.brightness)));
 
-    if (curCfg.pauseRefresh != gConfig.pauseRefresh)
-    {
-        gConfig.pauseRefresh = curCfg.pauseRefresh;
-        zlog("REFRESH %s\n", gConfig.pauseRefresh ? "PAUSED" : "RESUMED");
-        dprint("REFRESH %s\n", gConfig.pauseRefresh ? "PAUSED" : "RESUMED");
+    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(refresh, curCfg.refresh >= 5);
+
+    UPDATE_IF_CHANGED(debug);
+
+    UPDATE_IF_CHANGED(publishLogs);
+
+    UPDATE_IF_CHANGED(pauseRefresh);
+
+    if (dirty) {
+        auto badCount = gRedis->updateConfig(curCfg);
+        if (badCount) {
+            zlog("WARNING: tried to update Redis config but hit %d errors\n", badCount);
+        }
     }
 
     if (!gConfig.pauseRefresh)

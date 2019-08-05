@@ -89,8 +89,6 @@ int ZWRedis::incrementBootcount(bool reset)
 
 ZWAppConfig ZWRedis::readConfig()
 {
-    ZWAppConfig retCfg;
-
     // TODO: error check!
     auto bc = connection.redis->get(REDIS_KEY(":config:brightness"));
     auto rc = connection.redis->get(REDIS_KEY(":config:refresh"));
@@ -98,13 +96,31 @@ ZWAppConfig ZWRedis::readConfig()
     auto pl = connection.redis->get(REDIS_KEY(":config:publishLogs"));
     auto pu = connection.redis->get(REDIS_KEY(":config:pauseRefresh"));
 
-    retCfg.brightness = bc.toInt();
-    retCfg.refresh = rc.toInt();
-    retCfg.debug = (bool)dg.toInt();
-    retCfg.publishLogs = (bool)pl.toInt();
-    retCfg.pauseRefresh = (bool)pu.toInt();
+    _lastReadConfig.brightness = bc.toInt();
+    _lastReadConfig.refresh = rc.toInt();
+    _lastReadConfig.debug = (bool)dg.toInt();
+    _lastReadConfig.publishLogs = (bool)pl.toInt();
+    _lastReadConfig.pauseRefresh = (bool)pu.toInt();
 
-    return retCfg;
+    return _lastReadConfig;
+}
+
+int ZWRedis::updateConfig(ZWAppConfig newConfig)
+{
+    int badCount = 0;
+
+#define UPDATE_CHECK_THEN_SET(field) \
+    if (_lastReadConfig.field != newConfig.field) { \
+        badCount += !connection.redis->set(REDIS_KEY(":config:" #field), String(newConfig.field).c_str()); \
+    }
+
+    UPDATE_CHECK_THEN_SET(brightness);
+    UPDATE_CHECK_THEN_SET(refresh);
+    UPDATE_CHECK_THEN_SET(debug);
+    UPDATE_CHECK_THEN_SET(publishLogs);
+    UPDATE_CHECK_THEN_SET(pauseRefresh);
+
+    return badCount;
 }
 
 bool ZWRedis::handleUserKey(const char *keyPostfix, ZWRedisUserKeyHandler handler)

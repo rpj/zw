@@ -83,6 +83,8 @@ public:
 
     ZWAppConfig readConfig();
 
+    int updateConfig(ZWAppConfig newConfig);
+
     bool handleUserKey(const char *keyPostfix, ZWRedisUserKeyHandler handler);
 
     void publishLog(const char* msg);
@@ -92,6 +94,9 @@ public:
     std::vector<String> getRange(const char* key, int start, int stop);
 
     bool clearControlPoint();
+
+private:
+    ZWAppConfig _lastReadConfig;
 };
 
 #endif
