@@ -107,8 +107,8 @@ bool processGetValue(String &imEmit, ZWRedisResponder &responder)
     }
     else if (imEmit.equals("latency"))
     {
-        responder.setValue("{ \"immediate\": %d, \"rollingAvg\": %d }", 
-            immediateLatency, gUDRA);
+        responder.setValue("{ \"immediate\": %d, \"rollingAvg\": %d }",
+                           immediateLatency, gUDRA);
     }
     else
     {
@@ -219,10 +219,10 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
             zlog("Image source (md5=%s):\n\t%s\n", md5, fqUrl);
 
             if (runUpdate(fqUrl, md5, szb, preUpdateIRQDisableFunc,
-                []() { return gRedis->postCompletedUpdate(); }))
+                          []() { return gRedis->postCompletedUpdate(); }))
             {
-                zlog("OTA update wrote successfully! Restarting in %d seconds...\n", 
-                    OTA_RESET_DELAY);
+                zlog("OTA update wrote successfully! Restarting in %d seconds...\n",
+                     OTA_RESET_DELAY);
                 delay(OTA_RESET_DELAY * 1000);
                 ESP.restart();
                 return true; // never reached
@@ -269,34 +269,34 @@ void readConfigAndUserKeys()
     auto curCfg = gRedis->readConfig();
     bool dirty = false;
 
-#define UPDATE_IF_CHANGED(field) \
-    if (curCfg.field != gConfig.field) \
-    { \
+#define UPDATE_IF_CHANGED(field)                           \
+    if (curCfg.field != gConfig.field)                     \
+    {                                                      \
         zlog("[Config] %s -> %d\n", #field, curCfg.field); \
-        gConfig.field = curCfg.field; \
+        gConfig.field = curCfg.field;                      \
     }
 
 #define UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, extraIfUpdated) \
-    if ((extraCond) && curCfg.field != gConfig.field) \
-    { \
-        zlog("[Config] %s -> %d\n", #field, curCfg.field); \
-        gConfig.field = curCfg.field; \
-        extraIfUpdated; \
-    } \
-    else if (!(extraCond)) \
-    { \
-        zlog("Redis has invalid %s configuration, %d: correcting to %d\n", \
-            #field, curCfg.field, gConfig.field); \
-        curCfg.field = gConfig.field; \
-        dirty = true; \
+    if ((extraCond) && curCfg.field != gConfig.field)                                         \
+    {                                                                                         \
+        zlog("[Config] %s -> %d\n", #field, curCfg.field);                                    \
+        gConfig.field = curCfg.field;                                                         \
+        extraIfUpdated;                                                                       \
+    }                                                                                         \
+    else if (!(extraCond))                                                                    \
+    {                                                                                         \
+        zlog("Redis has invalid %s configuration, %d: correcting to %d\n",                    \
+             #field, curCfg.field, gConfig.field);                                            \
+        curCfg.field = gConfig.field;                                                         \
+        dirty = true;                                                                         \
     }
 
 #define UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(field, extraCond) \
-    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, do{}while(0))
+    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, do {} while (0))
 
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
-        curCfg.brightness >= 0 && curCfg.brightness < 8,
-        EXEC_ALL_DISPS(gDisplays, setBrightness(gConfig.brightness)));
+                                                        curCfg.brightness >= 0 && curCfg.brightness < 8,
+                                                        EXEC_ALL_DISPS(gDisplays, setBrightness(gConfig.brightness)));
 
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(refresh, curCfg.refresh >= 5);
 
@@ -306,9 +306,11 @@ void readConfigAndUserKeys()
 
     UPDATE_IF_CHANGED(pauseRefresh);
 
-    if (dirty) {
+    if (dirty)
+    {
         auto badCount = gRedis->updateConfig(curCfg);
-        if (badCount) {
+        if (badCount)
+        {
             zlog("WARNING: tried to update Redis config but hit %d errors\n", badCount);
         }
     }
@@ -333,8 +335,8 @@ void heartbeat()
 
         if ((__hb_count++ % CHECKIN_EVERY_X_REFRESH))
         {
-            gRedis->checkin(gSecondsSinceBoot, WiFi.localIP().toString().c_str(), 
-                immediateLatency, gUDRA, gConfig.refresh * CHECKIN_EVERY_X_REFRESH * CHECKIN_EXPIRY_MULT);
+            gRedis->checkin(gSecondsSinceBoot, WiFi.localIP().toString().c_str(),
+                            immediateLatency, gUDRA, gConfig.refresh * CHECKIN_EVERY_X_REFRESH * CHECKIN_EXPIRY_MULT);
         }
     }
 }
@@ -362,14 +364,15 @@ void __isr()
 
 void loop()
 {
-    if (__isrCount) {
+    if (__isrCount)
+    {
         portENTER_CRITICAL(&__isrMutex);
         --__isrCount;
         portEXIT_CRITICAL(&__isrMutex);
         ++gSecondsSinceBoot;
         dprint("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
     }
-    
+
     if (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot)
     {
         gLastRefreshTick = gSecondsSinceBoot;
@@ -383,53 +386,59 @@ void setup()
 {
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
-    
+
     verifyProvisioning();
 
     zlog("\n%s v" ZEROWATCH_VER " starting...\n", gHostname.c_str());
 
-    gDisplays = zwdisplayInit(gHostname);
-    if (gDisplays && wifi_init())
+    if (!(gDisplays = zwdisplayInit(gHostname))) {
+        dprint("Display init failed, halting forever\n");
+        __haltOrCatchFire();
+    }
+
+    auto verNum = String(ZEROWATCH_VER);
+    verNum.replace(".", "");
+    gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
+    delay(2000);
+
+    if (!wifi_init())
     {
-        auto verNum = String(ZEROWATCH_VER);
-        verNum.replace(".", "");
-        gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
+        dprint("WiFi init failed, halting forever\n");
+        __haltOrCatchFire();
+    }
 
-        delay(2000);
+    ZWRedisHostConfig redisConfig = {
+        .host = EEPROMCFG_RedisHost,
+        .port = EEPROMCFG_RedisPort,
+        .password = EEPROMCFG_RedisPass};
 
-        ZWRedisHostConfig redisConfig = {
-            .host = EEPROMCFG_RedisHost,
-            .port = EEPROMCFG_RedisPort,
-            .password = EEPROMCFG_RedisPass};
+    gRedis = new ZWRedis(gHostname, redisConfig);
 
-        gRedis = new ZWRedis(gHostname, redisConfig);
+    if (gRedis->connect())
+    {
+        zlog("Redis connection established, reading config...\n");
 
-        if (gRedis->connect())
-        {
-            zlog("Redis connection established, reading config...\n");
-            
-            readConfigAndUserKeys();
+        readConfigAndUserKeys();
 
-            zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
+        zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
 
-            if (gConfig.debug)
-                delay(5000);
+        if (gConfig.debug)
+            delay(5000);
 
-            gPublishLogsEmit = redis_publish_logs_emit;
+        gPublishLogsEmit = redis_publish_logs_emit;
 
-            __isrTimer = timerBegin(0, 80, true);
-            timerAttachInterrupt(__isrTimer, &__isr, true);
-            timerAlarmWrite(__isrTimer, 1000000, true);
-            timerAlarmEnable(__isrTimer);
+        __isrTimer = timerBegin(0, 80, true);
+        timerAttachInterrupt(__isrTimer, &__isr, true);
+        timerAlarmWrite(__isrTimer, 1000000, true);
+        timerAlarmEnable(__isrTimer);
 
-            zlog("Boot count: %d\n", gRedis->incrementBootcount());
-            zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
+        zlog("Boot count: %d\n", gRedis->incrementBootcount());
+        zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
 
-            tick(true);
-        }
-        else
-        {
-            zlog("ERROR: redis init failed!");
-        }
+        tick(true);
+    }
+    else
+    {
+        zlog("ERROR: redis init failed!");
     }
 }

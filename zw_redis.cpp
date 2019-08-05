@@ -3,7 +3,7 @@
 
 #define REDIS_KEY(x) String(hostname + x).c_str()
 
-#define REDIS_KEY_CREATE_LOCAL(x)          \
+#define REDIS_KEY_CREATE_LOCAL(x)                               \
     auto redisKey_local__String_capture = String(hostname + x); \
     auto redisKey_local = redisKey_local__String_capture.c_str();
 
@@ -34,7 +34,7 @@ bool ZWRedis::connect()
 extern int _last_free;
 void ZWRedis::checkin(
     unsigned long ticks,
-    const char* localIp,
+    const char *localIp,
     unsigned long immediateLatency,
     unsigned long averageLatency,
     int expireMessage)
@@ -80,10 +80,11 @@ int ZWRedis::incrementBootcount(bool reset)
     auto bc = connection.redis->get(redisKey_local);
     auto bcNext = (reset ? 0 : bc.toInt()) + 1;
 
-    if (connection.redis->set(redisKey_local, String(bcNext).c_str())) {
+    if (connection.redis->set(redisKey_local, String(bcNext).c_str()))
+    {
         return bcNext;
     }
-    
+
     return -1;
 }
 
@@ -109,8 +110,9 @@ int ZWRedis::updateConfig(ZWAppConfig newConfig)
 {
     int badCount = 0;
 
-#define UPDATE_CHECK_THEN_SET(field) \
-    if (_lastReadConfig.field != newConfig.field) { \
+#define UPDATE_CHECK_THEN_SET(field)                                                                       \
+    if (_lastReadConfig.field != newConfig.field)                                                          \
+    {                                                                                                      \
         badCount += !connection.redis->set(REDIS_KEY(":config:" #field), String(newConfig.field).c_str()); \
     }
 
@@ -133,7 +135,8 @@ bool ZWRedis::handleUserKey(const char *keyPostfix, ZWRedisUserKeyHandler handle
 
     auto getReturn = connection.redis->get(REDIS_KEY(keyPostfix));
 
-    if (getReturn && getReturn.length()) {
+    if (getReturn && getReturn.length())
+    {
         REDIS_KEY_CREATE_LOCAL(keyPostfix + ":" + getReturn);
         ///
         // TODO: handle this wierd print on things like 'update'...
@@ -146,8 +149,8 @@ bool ZWRedis::handleUserKey(const char *keyPostfix, ZWRedisUserKeyHandler handle
         //  "otp": 619
         //  }'"
         ///
-        dprint("ZWRedis::handleUserKey(%s) (key=%s) has return path '%s'\n", 
-            hostname.c_str(), keyPostfix, redisKey_local);
+        dprint("ZWRedis::handleUserKey(%s) (key=%s) has return path '%s'\n",
+               hostname.c_str(), keyPostfix, redisKey_local);
         ZWRedisResponder responder(*this, redisKey_local__String_capture);
         if (handler(getReturn, responder))
         {
@@ -161,18 +164,20 @@ bool ZWRedis::handleUserKey(const char *keyPostfix, ZWRedisUserKeyHandler handle
 void ZWRedis::responderHelper(const char *key, const char *msg, int expire)
 {
     connection.redis->publish(key, msg);
-    if (!connection.redis->set(key, msg)) {
+    if (!connection.redis->set(key, msg))
+    {
         zlog("ERROR: ZWRedis::responderHelper() set of %s failed\n", key);
         return;
     }
 
-    if (expire > 0) {
+    if (expire > 0)
+    {
         dprint("ZWRedis::responderHelper expiring %s at %d\n", key, expire);
         connection.redis->expire(key, expire);
     }
 }
 
-void ZWRedis::publishLog(const char* msg)
+void ZWRedis::publishLog(const char *msg)
 {
     connection.redis->publish(REDIS_KEY(":info:publishLogs"), msg);
 }
@@ -182,7 +187,7 @@ bool ZWRedis::postCompletedUpdate()
     return connection.redis->del(REDIS_KEY(":config:update"));
 }
 
-std::vector<String> ZWRedis::getRange(const char* key, int start, int stop)
+std::vector<String> ZWRedis::getRange(const char *key, int start, int stop)
 {
     return connection.redis->lrange(key, start, stop);
 }
