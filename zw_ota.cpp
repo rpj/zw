@@ -16,7 +16,12 @@ void updateProg(size_t s1, size_t s2)
     }
 }
 
-bool runUpdate(const char *url, const char *md5, size_t sizeInBytes, bool (*completedCallback)())
+bool runUpdate(
+    const char *url, 
+    const char *md5, 
+    size_t sizeInBytes, 
+    void (*preUpdateIRQDisable)(),
+    bool (*completedCallback)())
 {
     HTTPClient http;
     if (http.begin(url))
@@ -36,6 +41,10 @@ bool runUpdate(const char *url, const char *md5, size_t sizeInBytes, bool (*comp
             {
                 Update.onProgress(updateProg);
                 Update.setMD5(md5);
+
+                if (preUpdateIRQDisable)
+                    preUpdateIRQDisable();
+
                 dprint("OTA start szb=%d\n", sizeInBytes);
                 auto updateTook = Update.writeStream(dataStream);
                 if (updateTook == sizeInBytes && !Update.hasError())

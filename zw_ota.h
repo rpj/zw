@@ -10,6 +10,7 @@ bool runUpdate(
     const char *url, 
     const char *md5, 
     size_t sizeInBytes,
+    void (*preUpdateIRQDisable)(),
     bool (*completedCallback)());
 
 #endif
