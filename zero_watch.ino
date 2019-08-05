@@ -391,7 +391,8 @@ void setup()
 
     zlog("\n%s v" ZEROWATCH_VER " starting...\n", gHostname.c_str());
 
-    if (!(gDisplays = zwdisplayInit(gHostname))) {
+    if (!(gDisplays = zwdisplayInit(gHostname)))
+    {
         dprint("Display init failed, halting forever\n");
         __haltOrCatchFire();
     }
@@ -440,5 +441,6 @@ void setup()
     else
     {
         zlog("ERROR: redis init failed!");
+        __haltOrCatchFire();
     }
 }
