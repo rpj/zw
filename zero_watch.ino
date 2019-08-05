@@ -231,6 +231,8 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
             {
                 zlog("ERROR: OTA failed! %d\n", Update.getError());
             }
+
+            free(fqUrl);
         }
         else
         {
@@ -255,13 +257,21 @@ void redis_publish_logs_emit(const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     vsprintf(buf, fmt, args);
+    va_end(args);
+
     auto len = strlen(buf);
 
     if (buf[len - 1] == '\n')
         buf[len - 1] = '\0';
 
-    gRedis->publishLog(buf);
-    va_end(args);
+#define PUB_FMT_STR "{\"source\":\"%s\",\"type\":\"VALUE\",\"ts\":%s,\"value\":{\"logline\":\"%s\"}}"
+    auto tickStr = String((unsigned long)gSecondsSinceBoot);
+    auto pubLen = strlen(PUB_FMT_STR) + len + gHostname.length() + tickStr.length();
+    char *jbuf = (char*)malloc(pubLen);
+    bzero(jbuf, pubLen);
+    snprintf(jbuf, pubLen, PUB_FMT_STR, gHostname.c_str(), tickStr.c_str(), buf);
+    gRedis->publishLog(jbuf);
+    free(jbuf);
 }
 
 void readConfigAndUserKeys()
