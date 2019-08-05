@@ -415,32 +415,30 @@ void setup()
 
     gRedis = new ZWRedis(gHostname, redisConfig);
 
-    if (gRedis->connect())
-    {
-        zlog("Redis connection established, reading config...\n");
-
-        readConfigAndUserKeys();
-
-        zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
-
-        if (gConfig.debug)
-            delay(5000);
-
-        gPublishLogsEmit = redis_publish_logs_emit;
-
-        __isrTimer = timerBegin(0, 80, true);
-        timerAttachInterrupt(__isrTimer, &__isr, true);
-        timerAlarmWrite(__isrTimer, 1000000, true);
-        timerAlarmEnable(__isrTimer);
-
-        zlog("Boot count: %d\n", gRedis->incrementBootcount());
-        zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
-
-        tick(true);
-    }
-    else
+    if (!gRedis->connect())
     {
         zlog("ERROR: redis init failed!");
         __haltOrCatchFire();
     }
+
+    zlog("Redis connection established, reading config...\n");
+
+    readConfigAndUserKeys();
+
+    zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
+
+    if (gConfig.debug)
+        delay(5000);
+
+    gPublishLogsEmit = redis_publish_logs_emit;
+
+    __isrTimer = timerBegin(0, 80, true);
+    timerAttachInterrupt(__isrTimer, &__isr, true);
+    timerAlarmWrite(__isrTimer, 1000000, true);
+    timerAlarmEnable(__isrTimer);
+
+    zlog("Boot count: %d\n", gRedis->incrementBootcount());
+    zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
+
+    tick(true);
 }
