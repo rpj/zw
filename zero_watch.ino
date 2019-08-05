@@ -17,7 +17,9 @@
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
 #define DEF_BRIGHT 0
-#define HB_CHECKIN 5
+#define CHECKIN_EVERY_X_REFRESH 5
+#define CHECKIN_EXPIRY_MULT 2
+#define HEARTBEAT_EXPIRY_MULT 5
 #if DEBUG
 #define DEF_REFRESH 20
 #else
@@ -312,15 +314,15 @@ void heartbeat()
     static uint64_t __hb_count = 0;
     if (gRedis)
     {
-        if (!gRedis->heartbeat(gConfig.refresh * 5))
+        if (!gRedis->heartbeat(gConfig.refresh * HEARTBEAT_EXPIRY_MULT))
         {
             zlog("WARNING: heartbeat failed!\n");
         }
 
-        if ((__hb_count++ % HB_CHECKIN))
+        if ((__hb_count++ % CHECKIN_EVERY_X_REFRESH))
         {
             gRedis->checkin(gSecondsSinceBoot, WiFi.localIP().toString().c_str(), 
-                immediateLatency, gUDRA, gConfig.refresh * 5);
+                immediateLatency, gUDRA, gConfig.refresh * CHECKIN_EVERY_X_REFRESH * CHECKIN_EXPIRY_MULT);
         }
     }
 }
