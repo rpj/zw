@@ -76,7 +76,7 @@ DisplaySpec gDisplays_EZERO[] = {
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
 DisplaySpec gDisplays_ETEST[] = {
-    {26, 25, nullptr, {"zed:sensor:SPS30:mc_2p5:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
+    {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
 DisplaySpec *zwdisplayInit(String &hostname)

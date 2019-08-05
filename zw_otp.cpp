@@ -11,8 +11,6 @@ static const uint8_t fudgeTableLen = 10;
 // to generate anew, use ./scripts/otp-generate.pl
 bool otpCheck(uint16_t otp)
 {
-    dprint("[OTP] A: %d\n", otp);
-    dprint("[OTP] I: %ld\n", micros());
     auto div = (unsigned long)1e6 * 60 * OTP_WINDOW_MINUTES;
     auto now = micros();
 
@@ -23,17 +21,12 @@ bool otpCheck(uint16_t otp)
     }
 
     auto internalChecker = micros() / div;
-    dprint("[OTP] 0: %ld\n", internalChecker);
-
     internalChecker += fudgeTable[internalChecker % fudgeTableLen];
-    dprint("[OTP] D: %ld\n", internalChecker);
 
     for (int i = 0; i < gHostname.length(); i++)
     {
         internalChecker += gHostname.charAt(i);
-        dprint("[OTP] %d: %ld (+= %d)\n", i, internalChecker, (int)gHostname.charAt(i));
     }
 
-    dprint("[OTP] F: %d\n", (uint16_t)internalChecker);
     return (uint16_t)internalChecker == otp;
 }
