@@ -41,6 +41,8 @@ void runAnimation(TM1637Display *d, String animation, bool cE = false, int s = 0
 
 void demoMode(DisplaySpec* displayListStart);
 
+String displayConfigAsJson(DisplaySpec* displayListStart);
+
 #define EXEC_ALL_DISPS(DISPLIST_START, EXEC_ME)                                                      \
     do                                                                                               \
     {                                                                                                \

@@ -1,7 +1,7 @@
 #ifndef __ZW_COMMON__H__
 #define __ZW_COMMON__H__
 
-#define ZEROWATCH_VER "0.2.2.3"
+#define ZEROWATCH_VER "0.2.2.15"
 #define DEBUG 1
 
 struct ZWAppConfig
@@ -11,6 +11,7 @@ struct ZWAppConfig
     bool debug;
     bool publishLogs;
     bool pauseRefresh;
+    bool deepSleepMode;
 };
 
 void __haltOrCatchFire();

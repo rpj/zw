@@ -95,6 +95,8 @@ public:
 
     bool clearControlPoint();
 
+    bool registerDevice(const char* registryName, const char* hostname, const char* ident);
+
 private:
     ZWAppConfig _lastReadConfig;
 };

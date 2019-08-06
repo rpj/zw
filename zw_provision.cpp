@@ -1,5 +1,9 @@
 #include "zw_provision.h"
 #include "zw_logging.h"
+#include "zw_wifi.h"
+#include "zw_redis.h"
+
+#include <WiFi.h>
 
 char *EEPROMCFG_WiFiSSID = NULL;
 char *EEPROMCFG_WiFiPass = NULL;
@@ -120,7 +124,7 @@ void provisionUnit()
     dprint("\tOTA host:       \t%s\n", ZWPROV_OTA_HOST);
     dprint("***** WILL COMMIT THESE VALUES TO EEPROM IN %d SECONDS.... *****\n", ZWPROV_MODE_WRITE_DELAY);
     delay(ZWPROV_MODE_WRITE_DELAY * 1000);
-    dprint("ZeroWatch provisioning mode writing provisioning values...\n");
+    dprint("***** COMMITTING ABOVE VALUES TO EEPROM: *****\n");
 
     auto hostname = String(ZWPROV_HOSTNAME);
     zwassert(EEPROM.writeString(ZW_EEPROM_HOSTNAME_ADDR, hostname) == hostname.length());
@@ -135,7 +139,7 @@ void provisionUnit()
     lengths[4] = strlen(ZWPROV_REDIS_PASSWORD);
     lengths[5] = strlen(ZWPROV_OTA_HOST);
 
-    dprint("ZeroWatch provisioning LENGTHS: ");
+    dprint("*** ZeroWatch provisioning: lengths: ");
     for (int i = 0; i < CFG_ELEMENTS; i++)
     {
         dprint("%d ", lengths[i]);
@@ -145,7 +149,7 @@ void provisionUnit()
     auto writeLen = EEPROM.writeBytes(CFG_EEPROM_ADDR, lengths, CFG_HEADER_SIZE);
     if (writeLen != CFG_HEADER_SIZE)
     {
-        dprint("ZeroWatch provisioning ERROR: Config write (%d) failed\n", writeLen);
+        dprint("*** ZeroWatch provisioning ERROR: Config write (%d) failed\n", writeLen);
         return;
     }
 
@@ -161,12 +165,12 @@ void provisionUnit()
 
     for (int i = 0; i < CFG_ELEMENTS; i++)
     {
-        dprint("ZeroWatch provisioning: Writing %d bytes of element %d to address %d\n",
+        dprint("*** ZeroWatch provisioning: Writing %d bytes of element %d to address %d\n",
                lengths[i], i, offset);
         writeLen = EEPROM.writeBytes(offset, ptrptrs[i], lengths[i]);
         if (writeLen != lengths[i])
         {
-            dprint("ZeroWatch provisioning ERROR: element %d failed to write (%d != %d)\n", i, writeLen, lengths[i]);
+            dprint("*** ZeroWatch provisioning ERROR: element %d failed to write (%d != %d)\n", i, writeLen, lengths[i]);
             return;
         }
         offset += lengths[i];
@@ -174,29 +178,69 @@ void provisionUnit()
 
     if (EEPROM.commit())
     {
-        dprint("ZeroWatch provisioning: Write complete, verifying data...\n");
-
-        // TODO: hostname check
-        // TODO: FUNCTIONAL verification (?) (wifi, redis) - optional maybe
+        dprint("*** ZeroWatch provisioning: Write complete, verifying data...\n");
 
         if (checkUnitProvisioning())
         {
+            auto hnVerify = EEPROM.readString(ZW_EEPROM_HOSTNAME_ADDR);
+            zwassert(!memcmp(ZWPROV_HOSTNAME, hnVerify.c_str(), strlen(ZWPROV_HOSTNAME)));
             zwassert(!memcmp(ptrptrs[0], EEPROMCFG_WiFiSSID, lengths[0]));
             zwassert(!memcmp(ptrptrs[1], EEPROMCFG_WiFiPass, lengths[1]));
             zwassert(!memcmp(ptrptrs[2], EEPROMCFG_RedisHost, lengths[2]));
             zwassert(!memcmp(ptrptrs[3], &EEPROMCFG_RedisPort, lengths[3]));
             zwassert(!memcmp(ptrptrs[4], EEPROMCFG_RedisPass, lengths[4]));
             zwassert(!memcmp(ptrptrs[5], EEPROMCFG_OTAHost, lengths[5]));
-            dprint("ZeroWatch provisioning SUCCESS!\n");
+
+            dprint("*** ZeroWatch provisioning: data verified correctly!\n");
+
+#if ZEROWATCH_PROVISIONING_OPTION_FUNCTIONAL_VERIFICATION
+            dprint("*** ZeroWatch provisioning: starting functional check...\n");
+
+            ZWAppConfig blankConfig;
+            if (!zwWiFiInit(hnVerify.c_str(), blankConfig))
+            {
+                dprint("*** ZeroWatch provisioning: WiFi check failed\n");
+                __haltOrCatchFire();
+            }
+
+            ZWRedisHostConfig redisConfig = {
+                .host = EEPROMCFG_RedisHost,
+                .port = EEPROMCFG_RedisPort,
+                .password = EEPROMCFG_RedisPass};
+            ZWRedis redisCheck(hnVerify, redisConfig);
+
+            if (!redisCheck.connect())
+            {
+                dprint("*** ZeroWatch provisioning: Redis check failed\n");
+                __haltOrCatchFire();
+            }
+
+            if (ZWPROV_FUNCTIONAL_VERIFICATION_REGISTRY_DEVICE_IN)
+            {
+                dprint("*** ZeroWatch provisioning: registering device in '%s'...\n",
+                       ZWPROV_FUNCTIONAL_VERIFICATION_REGISTRY_DEVICE_IN);
+
+                if (!redisCheck.registerDevice(ZWPROV_FUNCTIONAL_VERIFICATION_REGISTRY_DEVICE_IN,
+                                               ZWPROV_HOSTNAME, WiFi.macAddress().c_str()))
+                {
+                    dprint("*** ZeroWatch provisioning WARNING: registration failed (or already registered)\n");
+                }
+            }
+
+#else
+            dprint("*** ZeroWatch provisioning WARNING: functional verification will be SKIPPED\n");
+#endif
+
+            dprint("\n\n***** ZeroWatch provisioning completed successfully!!\n");
         }
         else
         {
-            dprint("ZeroWatch provisioning FAILED! :shrug:\n");
+            dprint("*** ZeroWatch provisioning FAILED! :shrug:\n");
         }
     }
     else
     {
-        dprint("ZeroWatch provisioning: commit failed\n");
+        dprint("*** ZeroWatch provisioning: commit failed\n");
     }
 
     __haltOrCatchFire();
@@ -225,7 +269,7 @@ void verifyProvisioning()
     }
 
     // TODO: better place for this? I'm sure there is one...
-    if (!(gHostname.equals("ezero") || gHostname.equals("amini") || gHostname.equals("etest")))
+    if (!(gHostname.equals("ezero") || gHostname.equals("amini") || gHostname.equals("etest") || gHostname.equals("espresso")))
     {
         zlog("ERROR: Unrecognized hostname '%s', halting forever!\n", __hnShadowBuf);
         __haltOrCatchFire();

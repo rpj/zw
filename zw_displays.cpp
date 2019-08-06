@@ -1,5 +1,6 @@
 #include "zw_displays.h"
 #include "zw_logging.h"
+#include "zw_common.h"
 
 // TODO: get rid of these externs! (and associated includes!)
 extern unsigned long immediateLatency;
@@ -22,6 +23,9 @@ AnimStep light_loop[] = {{0, 1}, {1, 1}, {2, 1}, {3, 1}, {3, 2}, {3, 4}, {3, 8},
 
 void __runAnimation(TM1637Display *d, AnimStep *anim, bool cE = false, int s = 0)
 {
+    if (gConfig.deepSleepMode)
+        return;
+
     uint8_t v[] = {0, 0, 0, 0};
     for (AnimStep *w = anim; w->bits != -1 && w->digit != -1; w++)
     {
@@ -77,6 +81,7 @@ DisplaySpec gDisplays_EZERO[] = {
 
 DisplaySpec gDisplays_ETEST[] = {
     {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
+    {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
 DisplaySpec *zwdisplayInit(String &hostname)
@@ -91,7 +96,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
     {
         retSpec = gDisplays_AMINI;
     }
-    else if (hostname.equals("etest"))
+    else if (hostname.equals("etest") || hostname.equals("espresso"))
     {
         retSpec = gDisplays_ETEST;
     }
@@ -108,12 +113,13 @@ DisplaySpec *zwdisplayInit(String &hostname)
             zlog("Setting up display #%d with clock=%d DIO=%d\n",
                  (int)(spec - retSpec), spec->clockPin, spec->dioPin);
             spec->disp = new TM1637Display(spec->clockPin, spec->dioPin);
-            spec->disp->clear();
+            if (!gConfig.deepSleepMode)
+                spec->disp->clear();
             spec->disp->setBrightness(gConfig.brightness);
             __runAnimation(spec->disp, full_loop, false, 5);
         }
 
-        if (gConfig.debug)
+        if (gConfig.debug && !gConfig.deepSleepMode)
         {
             EXEC_ALL_DISPS(retSpec, showNumberDecEx((int)(walk - retSpec), 0,
                                                     false, 4 - (int)(walk - retSpec), (int)(walk - retSpec)));
@@ -211,4 +217,21 @@ void demoMode(DisplaySpec *displayListStart)
     dprint("Demo! Bleep bloop!\n");
     zlog("Demo! Bleep bloop!\n");
     EXEC_WITH_EACH_DISP(displayListStart, demoForDisp);
+}
+
+String displayConfigAsJson(DisplaySpec* displayListStart)
+{
+#define BUFLEN 512
+    static char _buf[BUFLEN];
+    bzero(_buf, BUFLEN);
+    String build = "[";
+    for (DisplaySpec *walk = displayListStart; walk->clockPin != -1 && walk->dioPin != -1; walk++)
+    {
+        snprintf(_buf, BUFLEN, 
+            "{\"clockPin\":%d,\"dioPin\":%d,\"listKey\":\"%s\",\"startIdx\":%d,\"endIdx\":%d}",
+            walk->clockPin, walk->dioPin, walk->spec.listKey, walk->spec.startIdx, walk->spec.endIdx);
+        build += String(_buf) + ((walk+1)->clockPin != -1 ? "," : ""); 
+    }
+    build += "]";
+    return build;
 }

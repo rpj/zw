@@ -102,6 +102,7 @@ ZWAppConfig ZWRedis::readConfig()
     _lastReadConfig.debug = (bool)dg.toInt();
     _lastReadConfig.publishLogs = (bool)pl.toInt();
     _lastReadConfig.pauseRefresh = (bool)pu.toInt();
+    _lastReadConfig.deepSleepMode = (bool)connection.redis->get(REDIS_KEY(":config:deepSleepMode")).toInt();
 
     return _lastReadConfig;
 }
@@ -195,6 +196,11 @@ std::vector<String> ZWRedis::getRange(const char *key, int start, int stop)
 bool ZWRedis::clearControlPoint()
 {
     return connection.redis->del(REDIS_KEY(":config:controlPoint"));
+}
+
+bool ZWRedis::registerDevice(const char* registryName, const char* hostname, const char* ident)
+{
+    return connection.redis->hset(registryName, ident, hostname);
 }
 
 void ZWRedisResponder::setValue(const char *format, ...)

@@ -13,6 +13,9 @@
 #include "zw_displays.h"
 #include "zw_otp.h"
 #include "zw_ota.h"
+#include "zw_wifi.h"
+
+#define DEEP_SLEEP_MODE_ENABLE 1
 
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
@@ -31,10 +34,13 @@ ZWAppConfig gConfig = {
     .refresh = DEF_REFRESH,
     .debug = DEBUG,
     .publishLogs = false,
-    .pauseRefresh = false};
+    .pauseRefresh = false,
+    .deepSleepMode = DEEP_SLEEP_MODE_ENABLE
+};
 ZWRedis *gRedis = NULL;
 DisplaySpec *gDisplays = NULL;
 void (*gPublishLogsEmit)(const char *fmt, ...);
+unsigned long gBootCount = 0;
 unsigned long long gSecondsSinceBoot = 0;
 unsigned long long gLastRefreshTick = 0;
 int _last_free = 0;
@@ -44,33 +50,6 @@ StaticJsonBuffer<1024> jsonBuf;
 hw_timer_t *__isrTimer = NULL;
 portMUX_TYPE __isrMutex = portMUX_INITIALIZER_UNLOCKED;
 volatile unsigned long __isrCount = 0;
-
-bool wifi_init()
-{
-    dprint("Disabling WiFi AP\n");
-    WiFi.mode(WIFI_MODE_STA);
-    WiFi.enableAP(false);
-
-    auto bstat = WiFi.begin(EEPROMCFG_WiFiSSID, EEPROMCFG_WiFiPass);
-    dprint("Connecting to to '%s'...\n", EEPROMCFG_WiFiSSID);
-    dprint("WiFi.begin() -> %d\n", bstat);
-
-    runAnimation(gDisplays[0].disp, "light_loop", true);
-    gDisplays[0].disp->clear();
-    gDisplays[0].disp->showNumberHexEx(0xffff, 64, true);
-    // TODO: timeout!
-    int _c = 0;
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        gDisplays[0].disp->showNumberHexEx((++_c << 8) + 0xff, 64, true);
-    }
-
-    zlog("WiFi adapter %s connected to '%s' as %s\n", WiFi.macAddress().c_str(),
-         EEPROMCFG_WiFiSSID, WiFi.localIP().toString().c_str());
-    gDisplays[0].disp->showNumberHexEx(0xFF00 | WiFi.status(), 64, false);
-
-    return true;
-}
 
 bool processGetValue(String &imEmit, ZWRedisResponder &responder)
 {
@@ -247,6 +226,12 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
     return false;
 }
 
+bool processDisplaysConfig(String &updateJson, ZWRedisResponder &responder)
+{
+    dprint("GOT DISPLAYS CONFIG: %s\n", updateJson.c_str());
+    return false;
+}
+
 void redis_publish_logs_emit(const char *fmt, ...)
 {
     // this function should never be called before gRedis is valid
@@ -316,6 +301,8 @@ void readConfigAndUserKeys()
 
     UPDATE_IF_CHANGED(pauseRefresh);
 
+    UPDATE_IF_CHANGED(deepSleepMode);
+
     if (dirty)
     {
         auto badCount = gRedis->updateConfig(curCfg);
@@ -330,6 +317,7 @@ void readConfigAndUserKeys()
         gRedis->handleUserKey(":config:getValue", processGetValue);
         gRedis->handleUserKey(":config:controlPoint", processControlPoint);
         gRedis->handleUserKey(":config:update", processUpdate);
+        gRedis->handleUserKey(":config:displays", processDisplaysConfig);
     }
 }
 
@@ -343,9 +331,9 @@ void heartbeat()
             zlog("WARNING: heartbeat failed!\n");
         }
 
-        if ((__hb_count++ % CHECKIN_EVERY_X_REFRESH))
+        if (gConfig.deepSleepMode || (__hb_count++ % CHECKIN_EVERY_X_REFRESH))
         {
-            gRedis->checkin(gSecondsSinceBoot, WiFi.localIP().toString().c_str(),
+            gRedis->checkin(gConfig.deepSleepMode ? gBootCount : gSecondsSinceBoot, WiFi.localIP().toString().c_str(),
                             immediateLatency, gUDRA, gConfig.refresh * CHECKIN_EVERY_X_REFRESH * CHECKIN_EXPIRY_MULT);
         }
     }
@@ -363,6 +351,14 @@ void tick(bool forceUpdate = false)
         updateDisplay(w);
 
     _last_free = ESP.getFreeHeap();
+
+    if (gConfig.deepSleepMode) {
+        heartbeat();
+        zlog("Deep-sleeping for %ds...\n", gConfig.refresh);
+        Serial.flush();
+        esp_sleep_enable_timer_wakeup(gConfig.refresh * 1e6);
+        esp_deep_sleep_start();
+    }
 }
 
 void __isr()
@@ -387,8 +383,8 @@ void loop()
     {
         gLastRefreshTick = gSecondsSinceBoot;
         readConfigAndUserKeys();
-        heartbeat();
         tick();
+        heartbeat();
     }
 }
 
@@ -400,19 +396,24 @@ void setup()
     verifyProvisioning();
 
     zlog("\n%s v" ZEROWATCH_VER " starting...\n", gHostname.c_str());
+#if DEEP_SLEEP_MODE_ENABLE
+    zlog("Deep sleep mode enabled by default\n");
+#endif
 
     if (!(gDisplays = zwdisplayInit(gHostname)))
     {
         dprint("Display init failed, halting forever\n");
         __haltOrCatchFire();
     }
+    
+    if (!gConfig.deepSleepMode) {
+        auto verNum = String(ZEROWATCH_VER);
+        verNum.replace(".", "");
+        gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
+        delay(2000);
+    }
 
-    auto verNum = String(ZEROWATCH_VER);
-    verNum.replace(".", "");
-    gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
-    delay(2000);
-
-    if (!wifi_init())
+    if (!zwWiFiInit(gHostname.c_str(), gConfig))
     {
         dprint("WiFi init failed, halting forever\n");
         __haltOrCatchFire();
@@ -436,8 +437,8 @@ void setup()
     readConfigAndUserKeys();
 
     zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
-
-    if (gConfig.debug)
+    
+    if (gConfig.debug && !gConfig.deepSleepMode)
         delay(5000);
 
     gPublishLogsEmit = redis_publish_logs_emit;
@@ -447,8 +448,9 @@ void setup()
     timerAlarmWrite(__isrTimer, 1000000, true);
     timerAlarmEnable(__isrTimer);
 
-    zlog("Boot count: %d\n", gRedis->incrementBootcount());
+    gBootCount = gRedis->incrementBootcount();
     zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
+    zlog("Boot count: %lu\n", gBootCount);
 
     tick(true);
 }

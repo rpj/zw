@@ -50,4 +50,4 @@ for ($i = 0; $i < length($targetHost); $i++) {
 
 $currentLc = $currentLc & 0xFFFF;
 print STDERR "[OTP] F: $currentLc\n";
-print "$currentLc";
+print "$currentLc\n";
