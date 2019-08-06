@@ -1,7 +1,7 @@
 #ifndef __ZW_COMMON__H__
 #define __ZW_COMMON__H__
 
-#define ZEROWATCH_VER "0.2.2.15"
+#define ZEROWATCH_VER "0.2.3.0"
 #define DEBUG 1
 
 struct ZWAppConfig
