@@ -97,6 +97,8 @@ public:
 
     bool registerDevice(const char* registryName, const char* hostname, const char* ident);
 
+    void logCritical(const char* fmt, ...);
+
 private:
     ZWAppConfig _lastReadConfig;
 };

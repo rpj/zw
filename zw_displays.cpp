@@ -84,6 +84,10 @@ DisplaySpec gDisplays_ETEST[] = {
     {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
+DisplaySpec gDisplays_NULLSPEC[] = {
+    {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}
+};
+
 DisplaySpec *zwdisplayInit(String &hostname)
 {
     DisplaySpec *retSpec = NULL;
@@ -96,12 +100,13 @@ DisplaySpec *zwdisplayInit(String &hostname)
     {
         retSpec = gDisplays_AMINI;
     }
-    else if (hostname.equals("etest") || hostname.equals("espresso"))
+    else if (hostname.equals("etest"))
     {
         retSpec = gDisplays_ETEST;
     }
-    else {
-        zlog("zwdisplayInit: ERROR unconfigured hostname '%s'\n", hostname.c_str());
+    else 
+    {
+        retSpec = gDisplays_NULLSPEC;
     }
 
     if (retSpec)

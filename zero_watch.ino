@@ -197,8 +197,11 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
             zlog("Starting OTA update of %0.2fKB\n", (szb / 1024.0));
             zlog("Image source (md5=%s):\n\t%s\n", md5, fqUrl);
 
-            if (runUpdate(fqUrl, md5, szb, preUpdateIRQDisableFunc,
-                          []() { return gRedis->postCompletedUpdate(); }))
+            if (runUpdate(fqUrl, md5, szb, preUpdateIRQDisableFunc, []() {
+                    if (gRedis->incrementBootcount(true) != 0)
+                        zlog("WARNING: unable to reset bootcount!\n");
+                    return gRedis->postCompletedUpdate(); 
+                }))
             {
                 zlog("OTA update wrote successfully! Restarting in %d seconds...\n",
                      OTA_RESET_DELAY);
@@ -426,10 +429,38 @@ void setup()
 
     gRedis = new ZWRedis(gHostname, redisConfig);
 
-    if (!gRedis->connect())
+#define NUM_RETRIES 5
+    int redisConnectRetries = NUM_RETRIES;
+    float redisWaitRetryTime = 50;
+    float redisWaitRetryBackoffMult = 1.37;
+
+    int errnos[NUM_RETRIES];
+    while (!gRedis->connect() && --redisConnectRetries) 
     {
-        zlog("ERROR: redis init failed!");
+        // seen: ECONNABORTED (makes sense)
+        errnos[NUM_RETRIES - (redisConnectRetries + 1)] = errno;
+        zlog("Redis connect failed but %d retries left, waiting %0.2fs and trying again (m=%0.3f)\n", 
+            redisConnectRetries, redisWaitRetryTime, redisWaitRetryBackoffMult);
+        redisWaitRetryTime *= redisWaitRetryBackoffMult;
+        redisWaitRetryBackoffMult *= redisWaitRetryBackoffMult;
+        delay(redisWaitRetryTime);
+    }
+
+    if (!redisConnectRetries)
+    {
+        zlog("ERROR: redis init failed!\n");
         __haltOrCatchFire();
+    }
+
+    if (redisConnectRetries != NUM_RETRIES)
+    {
+        String seenErrnos = "";
+        for (int i = 0; i < NUM_RETRIES && errnos[i]; i++)
+            seenErrnos += String(errnos[i]) + " ";
+        zlog("Redis connection had to be retried %d times. Saw: %s\n", 
+            NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
+        gRedis->logCritical("Redis connection had to be retried %d times. Saw: %s", 
+            NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
     }
 
     zlog("Redis connection established, reading config...\n");

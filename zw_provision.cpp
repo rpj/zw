@@ -37,12 +37,12 @@ void CFG_EEPROM_read()
     dprint("CFG_EEPROM_read: reading %d for lengths\n", CFG_HEADER_SIZE);
     zwassert(EEPROM.readBytes(CFG_EEPROM_ADDR, lengths, CFG_HEADER_SIZE) == CFG_HEADER_SIZE);
 
-    dprint("CFG_EEPROM_read: LENGTHS: ");
+    String lengthsStr = "";
     for (int i = 0; i < CFG_ELEMENTS; i++)
     {
-        dprint("%d ", lengths[i]);
+        lengthsStr += String(lengths[i]) + " ";
     }
-    dprint("\n");
+    dprint("CFG_EEPROM_read: LENGTHS: %s\n", lengthsStr.c_str());
 
     EEPROMCFG_WiFiSSID = (char *)malloc(lengths[0] + 1);
     bzero(EEPROMCFG_WiFiSSID, lengths[0] + 1);
@@ -265,13 +265,6 @@ void verifyProvisioning()
     if (!checkUnitProvisioning())
     {
         zlog("\n\nThis device is not provisioned! Please use ZEROWATCH_PROVISIONING_MODE to initialize it.");
-        __haltOrCatchFire();
-    }
-
-    // TODO: better place for this? I'm sure there is one...
-    if (!(gHostname.equals("ezero") || gHostname.equals("amini") || gHostname.equals("etest") || gHostname.equals("espresso")))
-    {
-        zlog("ERROR: Unrecognized hostname '%s', halting forever!\n", __hnShadowBuf);
         __haltOrCatchFire();
     }
 }

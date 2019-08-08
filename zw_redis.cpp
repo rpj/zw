@@ -1,5 +1,6 @@
 #include "zw_redis.h"
 #include "zw_logging.h"
+#include <errno.h>
 
 #define REDIS_KEY(x) String(hostname + x).c_str()
 
@@ -13,7 +14,8 @@ bool ZWRedis::connect()
 
     if (!connection.wifi->connect(configuration.host, configuration.port))
     {
-        dprint("Redis connection failed");
+        dprint("Redis connection failed (wifi): %s (%d)\n", strerror(errno), errno);
+        perror("redis: wifi");
         delete connection.wifi, connection.wifi = nullptr;
         return false;
     }
@@ -77,8 +79,12 @@ bool ZWRedis::heartbeat(int expire)
 int ZWRedis::incrementBootcount(bool reset)
 {
     REDIS_KEY_CREATE_LOCAL(":bootcount");
-    auto bc = connection.redis->get(redisKey_local);
-    auto bcNext = (reset ? 0 : bc.toInt()) + 1;
+    int bcNext = 0;
+
+    if (!reset) 
+    {
+        bcNext = connection.redis->get(redisKey_local).toInt() + 1;
+    }
 
     if (connection.redis->set(redisKey_local, String(bcNext).c_str()))
     {
@@ -203,6 +209,22 @@ bool ZWRedis::registerDevice(const char* registryName, const char* hostname, con
     return connection.redis->hset(registryName, ident, hostname);
 }
 
+void ZWRedis::logCritical(const char* format, ...)
+{
+#define BUFLEN 2048
+    char _buf[BUFLEN];
+    bzero(_buf, BUFLEN);
+    va_list args;
+    va_start(args, format);
+    vsnprintf(_buf, BUFLEN, format, args);
+    va_end(args);
+    // SHIT! need LPUSH 
+    //connection.redis->lset
+    // I guess this'll work ok for now...
+    static unsigned long __keyCount = 0;
+    connection.redis->hset(REDIS_KEY(":criticalLog"), String(++__keyCount).c_str(), _buf);
+}
+
 void ZWRedisResponder::setValue(const char *format, ...)
 {
 #define BUFLEN 2048
@@ -211,6 +233,6 @@ void ZWRedisResponder::setValue(const char *format, ...)
     va_list args;
     va_start(args, format);
     vsnprintf(_buf, BUFLEN, format, args);
-    redis.responderHelper(key.c_str(), _buf, expire);
     va_end(args);
+    redis.responderHelper(key.c_str(), _buf, expire);
 }
