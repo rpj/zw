@@ -435,7 +435,7 @@ void setup()
         __haltOrCatchFire();
     }
 
-    if (awakeCause == 0x03 && (bool)(ext1awake & BUTTON_MASK)) 
+    if (awakeCause == 0x03)// && (bool)(ext1awake & BUTTON_MASK)) 
     {
         dprint("YAWN");
         uint8_t _eyes[][4] = {
@@ -443,7 +443,7 @@ void setup()
             {64, 64, 64, 64},
             {1, 1, 1, 1}
         };
-        auto _d = 25;
+        auto _d = 45;
         gDisplays[0].disp->setSegments(_eyes[0]);
         delay(_d);
         gDisplays[0].disp->setSegments(_eyes[1]);
