@@ -6,6 +6,11 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 
+// good idea, yanked from https://github.com/spacehuhn/esp8266_deauther/blob/master/esp8266_deauther/esp8266_deauther.ino
+#if ARDUINOJSON_VERSION_MAJOR != 5
+#error Only ArduinoJSON version 5 is supported
+#endif
+
 #include "zw_common.h"
 #include "zw_logging.h"
 #include "zw_redis.h"

@@ -218,11 +218,14 @@ void ZWRedis::logCritical(const char* format, ...)
     va_start(args, format);
     vsnprintf(_buf, BUFLEN, format, args);
     va_end(args);
+
     // SHIT! need LPUSH 
     //connection.redis->lset
     // I guess this'll work ok for now...
-    static unsigned long __keyCount = 0;
-    connection.redis->hset(REDIS_KEY(":criticalLog"), String(++__keyCount).c_str(), _buf);
+    auto kcStr = connection.redis->get(REDIS_KEY(":crticialLogCount"));
+    auto kc = String((kcStr.length() ? 0 : kcStr.toInt()) + 1);
+    connection.redis->hset(REDIS_KEY(":criticalLog"), kc.c_str(), _buf);
+    connection.redis->set(REDIS_KEY(":crticialLogCount"), kc.c_str());
 }
 
 void ZWRedisResponder::setValue(const char *format, ...)
