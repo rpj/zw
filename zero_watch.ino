@@ -347,6 +347,8 @@ void heartbeat()
     }
 }
 
+#define BUTTON_MASK 0x8003000
+
 void tick(bool forceUpdate = false)
 {
     if (gConfig.pauseRefresh)
@@ -362,9 +364,14 @@ void tick(bool forceUpdate = false)
 
     if (gConfig.deepSleepMode) {
         heartbeat();
-        zlog("Deep-sleeping for %ds...\n", gConfig.refresh);
+        //zlog("Deep-sleeping for %ds...\n", gConfig.refresh);
+        dprint("ENABLING BUTTON WAKE with mask 0x%x in %d seconds\n", BUTTON_MASK, gConfig.refresh);
+        delay(gConfig.refresh * 1000);
+        dprint("SLEEPING!\n");
         Serial.flush();
-        esp_sleep_enable_timer_wakeup(gConfig.refresh * 1e6);
+        //esp_sleep_enable_timer_wakeup(gConfig.refresh * 1e6);
+        EXEC_ALL_DISPS(gDisplays, clear());
+        esp_sleep_enable_ext1_wakeup(BUTTON_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
         esp_deep_sleep_start();
     }
 }
@@ -383,8 +390,14 @@ void loop()
         portENTER_CRITICAL(&__isrMutex);
         --__isrCount;
         portEXIT_CRITICAL(&__isrMutex);
+
         ++gSecondsSinceBoot;
-        dprint("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
+
+        if (gConfig.debug)
+        {
+            Serial.printf("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
+            Serial.flush();
+        }
     }
 
     if (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot)
@@ -396,10 +409,18 @@ void loop()
     }
 }
 
+#define EXT1_AWAKE_GPIO(x) (int)(log((x))/log(2))
+
 void setup()
 {
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
+
+    auto awakeCause = esp_sleep_get_wakeup_cause();
+    auto ext1awake = esp_sleep_get_ext1_wakeup_status();
+
+    dprint("Wakeup reason: %d (0x%x)\n", awakeCause, awakeCause);
+    dprint("Ext1 awake: %d (raw: 0x%x) (ANDed: 0x%x)\n", EXT1_AWAKE_GPIO(ext1awake), (int)ext1awake, (int)(ext1awake & BUTTON_MASK));
 
     verifyProvisioning();
 
@@ -413,6 +434,24 @@ void setup()
         dprint("Display init failed, halting forever\n");
         __haltOrCatchFire();
     }
+
+    if (awakeCause == 0x03 && (bool)(ext1awake & BUTTON_MASK)) 
+    {
+        dprint("YAWN");
+        uint8_t _eyes[][4] = {
+            {8, 8, 8, 8},
+            {64, 64, 64, 64},
+            {1, 1, 1, 1}
+        };
+        auto _d = 25;
+        gDisplays[0].disp->setSegments(_eyes[0]);
+        delay(_d);
+        gDisplays[0].disp->setSegments(_eyes[1]);
+        delay(_d);
+        gDisplays[0].disp->setSegments(_eyes[2]);
+        delay(_d);
+    }
+
     
     if (!gConfig.deepSleepMode) {
         auto verNum = String(ZEROWATCH_VER);
