@@ -445,7 +445,7 @@ void tick(bool forceUpdate = false)
     }
 }
 
-void __isr()
+void IRAM_ATTR __isr()
 {
     portENTER_CRITICAL(&__isrMutex);
     ++__isrCount;
