@@ -363,6 +363,8 @@ void heartbeat()
     }
 }
 
+#define R_GREY 0xc618
+#define R_DGREY 0x7bef
 #if M5STACKC
 void zwM5StickC_UpdateBatteryDisplay()
 {
@@ -375,36 +377,41 @@ void zwM5StickC_UpdateBatteryDisplay()
     discharge = M5.Axp.GetIdischargeData() / 2;
     temp = -144.7 + M5.Axp.GetTempData() * 0.1;
 
-    auto battWarn = M5.Axp.GetWarningLeve();
-    if (battWarn)
-        M5.Lcd.setTextColor(RED, BLACK);
-    else
-        M5.Lcd.setTextColor(WHITE, BLACK);
-
-    const int xOff = 95;
+    const int xOff = 100;
     const int yIncr = 16;
     const int battFont = 2;
     int yOff = 0;
+
+    M5.Lcd.setTextColor(R_GREY, BLACK);
+    M5.Lcd.drawLine(xOff - 7, yOff, xOff - 7, yOff + 80, R_DGREY);
     M5.Lcd.setCursor(xOff, yOff, battFont);
+
+    if (M5.Axp.GetWarningLeve())
+        M5.Lcd.setTextColor(RED, BLACK);
     M5.Lcd.printf("%.3fV\n",vbat);  //battery voltage
     M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-    if (battWarn) {
-        M5.Lcd.printf("%d!\n", battWarn);  //battery charging current
-        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-    }
     if (charge) {
-        M5.Lcd.printf("+%dmA\n",charge);  //battery charging current
+        M5.Lcd.setTextColor(GREEN, BLACK);
+        M5.Lcd.printf("%dmA \n",charge);  //battery charging current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+        M5.Lcd.setTextColor(R_GREY, BLACK);
     }
     if (discharge) {
-        M5.Lcd.printf("-%dmA\n",discharge);  //battery output current
+        M5.Lcd.setTextColor(RED, BLACK);
+        M5.Lcd.printf("%dmA \n",discharge);  //battery output current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+        M5.Lcd.setTextColor(R_GREY, BLACK);
     }
-    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
-        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
     
-  M5.Rtc.GetBm8563Time();
-  M5.Lcd.printf("%02d:%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute, M5.Rtc.Second);
+    M5.Lcd.setTextColor(R_GREY, BLACK);
+    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
+    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    
+    M5.Rtc.GetBm8563Time();
+    M5.Lcd.setCursor(xOff, 65, 2);
+    M5.Lcd.setTextColor(CYAN, BLACK);
+    M5.Lcd.printf("%02d:%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute, M5.Rtc.Second);
+    M5.Lcd.setTextColor(WHITE, BLACK);
 }
 #else
 #define zwM5StickC_UpdateBatteryDisplay()
