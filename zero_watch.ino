@@ -262,6 +262,7 @@ void redis_publish_logs_emit(const char *fmt, ...)
     free(jbuf);
 }
 
+#if M5STACKC
 void readAndSetTime()
 {
     RTC_TimeTypeDef ts;
@@ -276,6 +277,10 @@ void readAndSetTime()
         zlog("Failed to get time from Redis (or it is exactly midnight!)\n");
     }
 }
+#else
+// TODO need to make this functional for all other devices!!
+#define readAndSetTime()
+#endif
 
 void readConfigAndUserKeys()
 {
