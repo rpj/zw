@@ -38,6 +38,29 @@ void __runAnimation(TM1637Display *d, AnimStep *anim, bool cE = false, int s = 0
     }
 }
 
+String __dispSpecNameComp(DisplaySpec* d, int cLimit, int lenLimit = 4)
+{
+    auto sName = String(d->spec.listKey);
+    sName.replace(":.list", "");
+    auto cIdx = -1;
+    for (int i = 0; i < cLimit; i++)
+        cIdx = sName.indexOf(":", cIdx + 1);
+    auto retVal = sName.substring(cIdx + 1);
+    if (retVal.length() > lenLimit)
+        retVal = retVal.substring(0, lenLimit);
+    return retVal;
+}
+
+String getDispSpecShortName(DisplaySpec* d)
+{
+    return __dispSpecNameComp(d, 3);
+}
+
+String getDispSpecSensorName(DisplaySpec* d)
+{
+    return __dispSpecNameComp(d, 2, 3);
+}
+
 static uint8_t degFSegs[] = {99, 113};
 static uint8_t fSeg[] = {113};
 static uint8_t prcntSeg[] = {99, 92};
@@ -47,7 +70,8 @@ int noop(int a) { return a; }
 void d_def(DisplaySpec *d) 
 { 
 #if M5STACKC
-    M5.Lcd.println(d->spec.lastVal);
+    M5.Lcd.printf("%s: %d\n", getDispSpecShortName(d).c_str(), 
+        d->spec.lastVal);
 #else
     d->disp->showNumberDec(d->spec.lastVal); 
 #endif
@@ -56,8 +80,8 @@ void d_def(DisplaySpec *d)
 void d_tempf(DisplaySpec *d)
 {
 #if M5STACKC
-    //M5.Lcd.printf("%.1f\r\n", d->spec.lastVal);
-    M5.Lcd.println(d->spec.lastVal);
+    M5.Lcd.printf("%s: %.1fF\n", getDispSpecSensorName(d).c_str(), 
+        (float)d->spec.lastVal / 100.0);
 #else
     if (d->spec.lastVal < 10000)
     {
@@ -75,8 +99,8 @@ void d_tempf(DisplaySpec *d)
 void d_humidPercent(DisplaySpec *d)
 {
 #if M5STACKC
-    //M5.Lcd.printf("%.1f\n", d->spec.lastVal);
-    M5.Lcd.println(d->spec.lastVal);
+    M5.Lcd.printf("%s: %.1f%%\n", getDispSpecSensorName(d).c_str(), 
+        (float)d->spec.lastVal / 100.0);
 #else
     d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
     d->disp->setSegments(prcntSeg, 2, 2);
@@ -101,6 +125,14 @@ DisplaySpec gDisplays_ETEST[] = {
     {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
+DisplaySpec gDisplays_M5STICKC[] = {
+    {33, 32, nullptr, {"zero:sensor:BME280:pressure:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
+    {18, 19, nullptr, {"zero:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
+    {13, 14, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
+    {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
+    {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
+    {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
+
 DisplaySpec gDisplays_NULLSPEC[] = {
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}
 };
@@ -109,7 +141,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
 {
     DisplaySpec *retSpec = NULL;
 
-    if (hostname.equals("ezero") || hostname.startsWith("stack"))
+    if (hostname.equals("ezero"))
     {
         retSpec = gDisplays_EZERO;
     }
@@ -120,6 +152,10 @@ DisplaySpec *zwdisplayInit(String &hostname)
     else if (hostname.equals("etest"))
     {
         retSpec = gDisplays_ETEST;
+    }
+    else if (hostname.startsWith("stack")) 
+    {
+        retSpec = gDisplays_M5STICKC;
     }
     else 
     {

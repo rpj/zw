@@ -292,9 +292,15 @@ void readConfigAndUserKeys()
 #define UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(field, extraCond) \
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, do {} while (0))
 
+#if M5STACKC
+    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
+                                                        curCfg.brightness >= 0 && curCfg.brightness < 8,
+                                                        M5.Axp.ScreenBreath(gConfig.brightness + 7));
+#else
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
                                                         curCfg.brightness >= 0 && curCfg.brightness < 8,
                                                         EXEC_ALL_DISPS(gDisplays, setBrightness(gConfig.brightness)));
+#endif
 
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRA(refresh, curCfg.refresh >= 5);
 
@@ -342,6 +348,53 @@ void heartbeat()
     }
 }
 
+#if M5STACKC
+void zwM5StickC_UpdateBatteryDisplay()
+{
+    double vbat = 0.0;
+    int discharge,charge;
+    double temp = 0.0;
+
+    vbat = M5.Axp.GetVbatData() * 1.1 / 1000;
+    charge = M5.Axp.GetIchargeData() / 2;
+    discharge = M5.Axp.GetIdischargeData() / 2;
+    temp = -144.7 + M5.Axp.GetTempData() * 0.1;
+
+    auto battWarn = M5.Axp.GetWarningLeve();
+    if (battWarn)
+        M5.Lcd.setTextColor(RED, BLACK);
+    else
+        M5.Lcd.setTextColor(WHITE, BLACK);
+
+    const int xOff = 95;
+    const int yIncr = 16;
+    const int battFont = 2;
+    int yOff = 0;
+    M5.Lcd.setCursor(xOff, yOff, battFont);
+    M5.Lcd.printf("%.3fV\n",vbat);  //battery voltage
+    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    if (battWarn) {
+        M5.Lcd.printf("%d!\n", battWarn);  //battery charging current
+        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    }
+    if (charge) {
+        M5.Lcd.printf("+%dmA\n",charge);  //battery charging current
+        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    }
+    if (discharge) {
+        M5.Lcd.printf("-%dmA\n",discharge);  //battery output current
+        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    }
+    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
+        M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    
+  M5.Rtc.GetBm8563Time();
+  M5.Lcd.printf("%02d:%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute, M5.Rtc.Second);
+}
+#else
+#define zwM5StickC_UpdateBatteryDisplay()
+#endif
+
 void tick(bool forceUpdate = false)
 {
     if (gConfig.pauseRefresh)
@@ -352,31 +405,12 @@ void tick(bool forceUpdate = false)
 
 #if M5STACKC
     M5.Lcd.fillScreen(TFT_BLACK);
+    zwM5StickC_UpdateBatteryDisplay();
     M5.Lcd.setCursor(0, 0, 2);
 #endif
 
     for (DisplaySpec *w = gDisplays; w->clockPin != -1 && w->dioPin != -1; w++)
         updateDisplay(w);
-
-#if M5STACKC
-    double vbat = 0.0;
-    int discharge,charge;
-    double temp = 0.0;
-    vbat      = M5.Axp.GetVbatData() * 1.1 / 1000;
-    charge    = M5.Axp.GetIchargeData() / 2;
-    discharge = M5.Axp.GetIdischargeData() / 2;
-    temp      =  -144.7 + M5.Axp.GetTempData() * 0.1;
-    if (M5.Axp.GetWarningLeve())
-        M5.Lcd.setTextColor(RED, BLACK);
-    M5.Lcd.setCursor(50, 0, 2);
-    M5.Lcd.printf("vbat: %.3fV",vbat);  //battery voltage
-    M5.Lcd.setCursor(50, 15, 2);
-    M5.Lcd.printf("ichg: %dmA",charge);  //battery charging current
-    M5.Lcd.setCursor(50, 30, 2);
-    M5.Lcd.printf("idcg: %dmA",discharge);  //battery output current
-    M5.Lcd.setCursor(50, 45, 2);
-    M5.Lcd.printf("temp: %.1fC",temp);  //axp192 inside temp
-#endif
 
     _last_free = ESP.getFreeHeap();
 
@@ -405,6 +439,7 @@ void loop()
         portEXIT_CRITICAL(&__isrMutex);
         ++gSecondsSinceBoot;
         dprint("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
+        zwM5StickC_UpdateBatteryDisplay();
     }
 
     if (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot)
@@ -420,7 +455,14 @@ void setup()
 {
 #if M5STACKC
     M5.begin();
+    pinMode(M5_BUTTON_HOME, INPUT_PULLUP);
     zlog("Built for M5StickC\n");
+/*
+    RTC_TimeTypeDef TimeStruct;
+    TimeStruct.Hours   = 22;
+    TimeStruct.Minutes = 40;
+    TimeStruct.Seconds = 00;
+    M5.Rtc.SetTime(&TimeStruct);*/
 #else
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
