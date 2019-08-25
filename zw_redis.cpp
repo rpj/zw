@@ -225,6 +225,13 @@ void ZWRedis::logCritical(const char* format, ...)
     connection.redis->hset(REDIS_KEY(":criticalLog"), String(++__keyCount).c_str(), _buf);
 }
 
+void ZWRedis::getTime(uint8_t* hour, uint8_t* minute, uint8_t* second)
+{
+    if (hour) *hour = (uint8_t)connection.redis->hget("rpjios.__meta.time", "hour").toInt();
+    if (minute) *minute = (uint8_t)connection.redis->hget("rpjios.__meta.time", "minute").toInt();
+    if (second) *second = (uint8_t)connection.redis->hget("rpjios.__meta.time", "second").toInt();
+}
+
 void ZWRedisResponder::setValue(const char *format, ...)
 {
 #define BUFLEN 2048

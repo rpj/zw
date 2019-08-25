@@ -262,6 +262,21 @@ void redis_publish_logs_emit(const char *fmt, ...)
     free(jbuf);
 }
 
+void readAndSetTime()
+{
+    RTC_TimeTypeDef ts;
+    bzero(&ts, sizeof(ts));
+    gRedis->getTime(&ts.Hours, &ts.Minutes, &ts.Seconds);
+    if (!(!ts.Hours && !ts.Minutes && !ts.Seconds)) {
+        M5.Rtc.SetTime(&ts);
+        zlog("Set time (from Redis) to %02d:%02d:%02d\n", 
+        ts.Hours, ts.Minutes, ts.Seconds);
+    }
+    else {
+        zlog("Failed to get time from Redis (or it is exactly midnight!)\n");
+    }
+}
+
 void readConfigAndUserKeys()
 {
     auto curCfg = gRedis->readConfig();
@@ -457,12 +472,6 @@ void setup()
     M5.begin();
     pinMode(M5_BUTTON_HOME, INPUT_PULLUP);
     zlog("Built for M5StickC\n");
-/*
-    RTC_TimeTypeDef TimeStruct;
-    TimeStruct.Hours   = 22;
-    TimeStruct.Minutes = 40;
-    TimeStruct.Seconds = 00;
-    M5.Rtc.SetTime(&TimeStruct);*/
 #else
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
@@ -536,6 +545,8 @@ void setup()
     }
 
     zlog("Redis connection established, reading config...\n");
+
+    readAndSetTime();
 
     readConfigAndUserKeys();
 

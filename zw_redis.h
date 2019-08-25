@@ -99,6 +99,8 @@ public:
 
     void logCritical(const char* fmt, ...);
 
+    void getTime(uint8_t* hour, uint8_t* minute, uint8_t* second);
+
 private:
     ZWAppConfig _lastReadConfig;
 };
