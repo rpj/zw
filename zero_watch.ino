@@ -397,7 +397,7 @@ void zwM5StickC_UpdateBatteryDisplay()
         M5.Lcd.setTextColor(R_GREY, BLACK);
     }
     if (discharge) {
-        M5.Lcd.setTextColor(RED, BLACK);
+        M5.Lcd.setTextColor(YELLOW, BLACK);
         M5.Lcd.printf("%dmA \n",discharge);  //battery output current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
         M5.Lcd.setTextColor(R_GREY, BLACK);
