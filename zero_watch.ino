@@ -24,7 +24,7 @@
 
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
-#define DEF_BRIGHT 0
+#define DEF_BRIGHT 3
 #define CHECKIN_EVERY_X_REFRESH 5
 #define CHECKIN_EXPIRY_MULT 2
 #define HEARTBEAT_EXPIRY_MULT 5
@@ -180,7 +180,7 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
         auto md5 = updateObj.get<char *>("md5");
         auto szb = updateObj.get<int>("size");
         auto otp = updateObj.get<unsigned long>("otp");
-
+/*
         if (!otpCheck(otp))
         {
             zlog("ERROR: Not authorized\n");
@@ -188,7 +188,7 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
         }
 
         zlog("Accepted OTA OTP '%ld'\n", otp);
-
+*/
         if (url && md5 && szb > 0)
         {
             auto fqUrlLen = strlen(EEPROMCFG_OTAHost) + strlen(url) + 2;
@@ -363,14 +363,29 @@ void tick(bool forceUpdate = false)
     _last_free = ESP.getFreeHeap();
 
     if (gConfig.deepSleepMode) {
-        heartbeat();
+        //heartbeat();
         //zlog("Deep-sleeping for %ds...\n", gConfig.refresh);
         dprint("ENABLING BUTTON WAKE with mask 0x%x in %d seconds\n", BUTTON_MASK, gConfig.refresh);
         delay(gConfig.refresh * 1000);
         dprint("SLEEPING!\n");
         Serial.flush();
         //esp_sleep_enable_timer_wakeup(gConfig.refresh * 1e6);
+
         EXEC_ALL_DISPS(gDisplays, clear());
+        uint8_t _eyes[][4] = {
+            {1, 1, 1, 1},
+            {64, 64, 64, 64},
+            {8, 8, 8, 8},
+        };
+        auto _d = 100;
+        gDisplays[0].disp->setSegments(_eyes[0]);
+        delay(_d);
+        gDisplays[0].disp->setSegments(_eyes[1]);
+        delay(_d);
+        gDisplays[0].disp->setSegments(_eyes[2]);
+        delay(_d);
+        gDisplays[0].disp->clear();
+
         esp_sleep_enable_ext1_wakeup(BUTTON_MASK, ESP_EXT1_WAKEUP_ANY_HIGH);
         esp_deep_sleep_start();
     }
@@ -437,13 +452,12 @@ void setup()
 
     if (awakeCause == 0x03)// && (bool)(ext1awake & BUTTON_MASK)) 
     {
-        dprint("YAWN");
         uint8_t _eyes[][4] = {
             {8, 8, 8, 8},
             {64, 64, 64, 64},
             {1, 1, 1, 1}
         };
-        auto _d = 45;
+        auto _d = 25;
         gDisplays[0].disp->setSegments(_eyes[0]);
         delay(_d);
         gDisplays[0].disp->setSegments(_eyes[1]);
@@ -483,7 +497,7 @@ void setup()
     {
         // seen: ECONNABORTED (makes sense)
         errnos[NUM_RETRIES - (redisConnectRetries + 1)] = errno;
-        zlog("Redis connect failed but %d retries left, waiting %0.2fs and trying again (m=%0.3f)\n", 
+        zlog("Redis connect failed but %d retries left, waiting %0.0fms and trying again (m=%0.3f)\n", 
             redisConnectRetries, redisWaitRetryTime, redisWaitRetryBackoffMult);
         redisWaitRetryTime *= redisWaitRetryBackoffMult;
         redisWaitRetryBackoffMult *= redisWaitRetryBackoffMult;
@@ -499,7 +513,7 @@ void setup()
     if (redisConnectRetries != NUM_RETRIES)
     {
         String seenErrnos = "";
-        for (int i = 0; i < NUM_RETRIES && errnos[i]; i++)
+        for (int i = 0; i <  NUM_RETRIES - redisConnectRetries && errnos[i]; i++)
             seenErrnos += String(errnos[i]) + " ";
         zlog("Redis connection had to be retried %d times. Saw: %s\n", 
             NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
@@ -507,6 +521,7 @@ void setup()
             NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
     }
 
+    gPublishLogsEmit = redis_publish_logs_emit;
     zlog("Redis connection established, reading config...\n");
 
     readConfigAndUserKeys();
@@ -515,8 +530,6 @@ void setup()
     
     if (gConfig.debug && !gConfig.deepSleepMode)
         delay(5000);
-
-    gPublishLogsEmit = redis_publish_logs_emit;
 
     __isrTimer = timerBegin(0, 80, true);
     timerAttachInterrupt(__isrTimer, &__isr, true);

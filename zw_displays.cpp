@@ -66,7 +66,7 @@ void d_humidPercent(DisplaySpec *d)
     d->disp->setSegments(prcntSeg, 2, 2);
 }
 
-DisplaySpec gDisplays_AMINI[] = {
+DisplaySpec gDisplays_ESPRESSO[] = {
     {33, 32, nullptr, {"zero:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
     {26, 25, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
     {18, 19, nullptr, {"zero:sensor:BME280:pressure:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
@@ -86,11 +86,6 @@ DisplaySpec gDisplays_ETEST[] = {
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}
 };
 
-DisplaySpec gDisplays_ESPRESSO[] = {
-    {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
-    {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}
-};
-
 DisplaySpec gDisplays_NULLSPEC[] = {
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}
 };
@@ -102,10 +97,6 @@ DisplaySpec *zwdisplayInit(String &hostname)
     if (hostname.equals("ezero"))
     {
         retSpec = gDisplays_EZERO;
-    }
-    else if (hostname.equals("amini"))
-    {
-        retSpec = gDisplays_AMINI;
     }
     else if (hostname.equals("etest"))
     {
