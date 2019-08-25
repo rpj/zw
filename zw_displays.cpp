@@ -44,10 +44,21 @@ static uint8_t prcntSeg[] = {99, 92};
 
 int noop(int a) { return a; }
 
-void d_def(DisplaySpec *d) { d->disp->showNumberDec(d->spec.lastVal); }
+void d_def(DisplaySpec *d) 
+{ 
+#if M5STACKC
+    M5.Lcd.println(d->spec.lastVal);
+#else
+    d->disp->showNumberDec(d->spec.lastVal); 
+#endif
+}
 
 void d_tempf(DisplaySpec *d)
 {
+#if M5STACKC
+    //M5.Lcd.printf("%.1f\r\n", d->spec.lastVal);
+    M5.Lcd.println(d->spec.lastVal);
+#else
     if (d->spec.lastVal < 10000)
     {
         d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
@@ -58,12 +69,18 @@ void d_tempf(DisplaySpec *d)
         d->disp->showNumberDecEx(d->spec.lastVal / 100, 0, false, 3);
         d->disp->setSegments(fSeg, 1, 3);
     }
+#endif
 }
 
 void d_humidPercent(DisplaySpec *d)
 {
+#if M5STACKC
+    //M5.Lcd.printf("%.1f\n", d->spec.lastVal);
+    M5.Lcd.println(d->spec.lastVal);
+#else
     d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
     d->disp->setSegments(prcntSeg, 2, 2);
+#endif
 }
 
 DisplaySpec gDisplays_AMINI[] = {
@@ -92,7 +109,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
 {
     DisplaySpec *retSpec = NULL;
 
-    if (hostname.equals("ezero"))
+    if (hostname.equals("ezero") || hostname.startsWith("stack"))
     {
         retSpec = gDisplays_EZERO;
     }
@@ -113,6 +130,14 @@ DisplaySpec *zwdisplayInit(String &hostname)
     {
         auto spec = retSpec;
         zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
+        
+#if M5STACKC
+        zlog("M5StickC display init\n");
+        M5.Axp.ScreenBreath(gConfig.brightness + 7);
+        M5.Lcd.setRotation(3);
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Lcd.setCursor(0, 0, 2);
+#else
         for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
         {
             zlog("Setting up display #%d with clock=%d DIO=%d\n",
@@ -123,6 +148,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
             spec->disp->setBrightness(gConfig.brightness);
             __runAnimation(spec->disp, full_loop, false, 5);
         }
+#endif
 
         if (gConfig.debug && !gConfig.deepSleepMode)
         {

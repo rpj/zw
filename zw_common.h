@@ -1,8 +1,13 @@
 #ifndef __ZW_COMMON__H__
 #define __ZW_COMMON__H__
 
-#define ZEROWATCH_VER "0.2.3.8"
+#define ZEROWATCH_VER "0.2.5.0"
 #define DEBUG 1
+#define M5STACKC 1
+
+#if M5STACKC
+#include <M5StickC.h>
+#endif
 
 struct ZWAppConfig
 {

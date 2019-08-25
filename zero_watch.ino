@@ -350,8 +350,33 @@ void tick(bool forceUpdate = false)
 
     zlog("Awake at us=%lu tick=%lld\n", micros(), gSecondsSinceBoot);
 
+#if M5STACKC
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.setCursor(0, 0, 2);
+#endif
+
     for (DisplaySpec *w = gDisplays; w->clockPin != -1 && w->dioPin != -1; w++)
         updateDisplay(w);
+
+#if M5STACKC
+    double vbat = 0.0;
+    int discharge,charge;
+    double temp = 0.0;
+    vbat      = M5.Axp.GetVbatData() * 1.1 / 1000;
+    charge    = M5.Axp.GetIchargeData() / 2;
+    discharge = M5.Axp.GetIdischargeData() / 2;
+    temp      =  -144.7 + M5.Axp.GetTempData() * 0.1;
+    if (M5.Axp.GetWarningLeve())
+        M5.Lcd.setTextColor(RED, BLACK);
+    M5.Lcd.setCursor(50, 0, 2);
+    M5.Lcd.printf("vbat: %.3fV",vbat);  //battery voltage
+    M5.Lcd.setCursor(50, 15, 2);
+    M5.Lcd.printf("ichg: %dmA",charge);  //battery charging current
+    M5.Lcd.setCursor(50, 30, 2);
+    M5.Lcd.printf("idcg: %dmA",discharge);  //battery output current
+    M5.Lcd.setCursor(50, 45, 2);
+    M5.Lcd.printf("temp: %.1fC",temp);  //axp192 inside temp
+#endif
 
     _last_free = ESP.getFreeHeap();
 
@@ -393,8 +418,13 @@ void loop()
 
 void setup()
 {
+#if M5STACKC
+    M5.begin();
+    zlog("Built for M5StickC\n");
+#else
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
+#endif
 
     verifyProvisioning();
 
