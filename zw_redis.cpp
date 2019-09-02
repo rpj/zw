@@ -81,7 +81,7 @@ int ZWRedis::incrementBootcount(bool reset)
     REDIS_KEY_CREATE_LOCAL(":bootcount");
     int bcNext = 0;
 
-    if (!reset) 
+    if (!reset)
     {
         bcNext = connection.redis->get(redisKey_local).toInt() + 1;
     }
@@ -204,12 +204,12 @@ bool ZWRedis::clearControlPoint()
     return connection.redis->del(REDIS_KEY(":config:controlPoint"));
 }
 
-bool ZWRedis::registerDevice(const char* registryName, const char* hostname, const char* ident)
+bool ZWRedis::registerDevice(const char *registryName, const char *hostname, const char *ident)
 {
     return connection.redis->hset(registryName, ident, hostname);
 }
 
-void ZWRedis::logCritical(const char* format, ...)
+void ZWRedis::logCritical(const char *format, ...)
 {
 #define BUFLEN 2048
     char _buf[BUFLEN];
@@ -218,18 +218,21 @@ void ZWRedis::logCritical(const char* format, ...)
     va_start(args, format);
     vsnprintf(_buf, BUFLEN, format, args);
     va_end(args);
-    // SHIT! need LPUSH 
+    // SHIT! need LPUSH
     //connection.redis->lset
     // I guess this'll work ok for now...
     static unsigned long __keyCount = 0;
     connection.redis->hset(REDIS_KEY(":criticalLog"), String(++__keyCount).c_str(), _buf);
 }
 
-void ZWRedis::getTime(uint8_t* hour, uint8_t* minute, uint8_t* second)
+void ZWRedis::getTime(uint8_t *hour, uint8_t *minute, uint8_t *second)
 {
-    if (hour) *hour = (uint8_t)connection.redis->hget("rpjios.__meta.time", "hour").toInt();
-    if (minute) *minute = (uint8_t)connection.redis->hget("rpjios.__meta.time", "minute").toInt();
-    if (second) *second = (uint8_t)connection.redis->hget("rpjios.__meta.time", "second").toInt();
+    if (hour)
+        *hour = (uint8_t)connection.redis->hget("rpjios.__meta.time", "hour").toInt();
+    if (minute)
+        *minute = (uint8_t)connection.redis->hget("rpjios.__meta.time", "minute").toInt();
+    if (second)
+        *second = (uint8_t)connection.redis->hget("rpjios.__meta.time", "second").toInt();
 }
 
 void ZWRedisResponder::setValue(const char *format, ...)

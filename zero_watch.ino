@@ -19,7 +19,7 @@
 
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
-#define DEF_BRIGHT 1
+#define DEF_BRIGHT 2
 #define CHECKIN_EVERY_X_REFRESH 5
 #define CHECKIN_EXPIRY_MULT 2
 #define HEARTBEAT_EXPIRY_MULT 5
@@ -290,8 +290,7 @@ void readAndSetTime()
     if (!(!ts.Hours && !ts.Minutes && !ts.Seconds))
     {
         M5.Rtc.SetTime(&ts);
-        zlog("Set time (from Redis) to %02d:%02d:%02d\n",
-             ts.Hours, ts.Minutes, ts.Seconds);
+        zlog("Set time: %02d:%02d\n", ts.Hours, ts.Minutes);
     }
     else
     {
@@ -443,6 +442,13 @@ void zwM5StickC_UpdateBatteryDisplay()
     M5.Lcd.setTextColor(CYAN, BLACK);
     M5.Lcd.printf("%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute);
     M5.Lcd.setTextColor(WHITE, BLACK);
+
+    // brightness line
+    auto brightLvl = 8 - gConfig.brightness;
+    M5.Lcd.drawLine(140, 10, 140, 30, DARKCYAN);
+    M5.Lcd.drawLine(142, 10, 142, 30, CYAN);
+    M5.Lcd.drawLine(143, 10, 143, 30, CYAN);
+    M5.Lcd.drawLine(145, 10, 145, 30, DARKCYAN);
 }
 #else
 #define zwM5StickC_UpdateBatteryDisplay()
@@ -516,9 +522,9 @@ void loop()
             {
                 __dispPage = (__dispPage + 1) % (__dispPages + 1);
             }
-        }
 
-        forceTick = true;
+            forceTick = true;
+        }
     }
 
     if (curRst != __lastRst)
@@ -564,22 +570,22 @@ void setup()
 
     verifyProvisioning();
 
-    zlog("\n%s v" ZEROWATCH_VER " starting...\n", gHostname.c_str());
-#if DEEP_SLEEP_MODE_ENABLE
-    zlog("Deep sleep mode enabled by default\n");
-#endif
-
     if (!(gDisplays = zwdisplayInit(gHostname)))
     {
         dprint("Display init failed, halting forever\n");
         __haltOrCatchFire();
     }
 
+#if M5STACKC
+    M5.Lcd.setCursor(0, 0, 1);
+#endif
+
+    zlog("%s v" ZEROWATCH_VER "\n", gHostname.c_str());
+
     auto dWalk = gDisplays;
     for (; dWalk->clockPin != -1 && dWalk->dioPin != -1; dWalk++)
         ;
     __dispPages = (int)((dWalk - gDisplays) / PAGE_SIZE) - (!((dWalk - gDisplays) % PAGE_SIZE) ? 1 : 0);
-    zlog("Have %d display pages\n", __dispPages + 1);
 
     if (!gConfig.deepSleepMode)
     {
@@ -636,31 +642,29 @@ void setup()
                             NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
     }
 
-#if M5STACKC
-    delay(5000);
-    gConfig.publishLogs = false;
-    gPublishLogsEmit = NULL;
-#endif
+    gBootCount = gRedis->incrementBootcount();
 
-    zlog("Redis connection established, reading config...\n");
+    zlog("Initialized! (debug %s)\n", gConfig.debug ? "on" : "off");
+    zlog("Boot count: %lu\n", gBootCount);
 
     readConfigAndUserKeys();
 
-    zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
-
     if (gConfig.debug && !gConfig.deepSleepMode)
         delay(5000);
-
-    gPublishLogsEmit = redis_publish_logs_emit;
 
     __isrTimer = timerBegin(0, 80, true);
     timerAttachInterrupt(__isrTimer, &__isr, true);
     timerAlarmWrite(__isrTimer, 1000000, true);
     timerAlarmEnable(__isrTimer);
 
-    gBootCount = gRedis->incrementBootcount();
-    zlog("%s v" ZEROWATCH_VER " up & running\n", gHostname.c_str());
-    zlog("Boot count: %lu\n", gBootCount);
+#if M5STACKC
+    delay(gConfig.debug ? 10000 : 1000);
+    gPublishLogsEmit = NULL;
+    M5.Lcd.setCursor(0, 0, 2);
+    M5.Lcd.fillScreen(TFT_BLACK);
+#endif
+
+    gPublishLogsEmit = redis_publish_logs_emit;
 
     tick(true);
 }

@@ -5,7 +5,6 @@
 
 bool zwWiFiInit(const char *hostname, ZWAppConfig config)
 {
-    zlog("Disabling WiFi AP\n");
     WiFi.mode(WIFI_MODE_STA);
     WiFi.enableAP(false);
 
@@ -15,14 +14,12 @@ bool zwWiFiInit(const char *hostname, ZWAppConfig config)
     }
 
     auto bstat = WiFi.begin(EEPROMCFG_WiFiSSID, EEPROMCFG_WiFiPass);
-    zlog("Connecting to to '%s'...\n", EEPROMCFG_WiFiSSID);
-    zlog("WiFi.begin() -> %d\n", bstat);
+    zlog("Connecting to '%s'\n", EEPROMCFG_WiFiSSID);
 
     // TODO: timeout!
     while (WiFi.status() != WL_CONNECTED) {}
 
-    zlog("WiFi adapter %s connected to '%s' as %s\n", WiFi.macAddress().c_str(),
-         EEPROMCFG_WiFiSSID, WiFi.localIP().toString().c_str());
+    zlog("Connected as %s\n", WiFi.localIP().toString().c_str());
 
     return true;
 }

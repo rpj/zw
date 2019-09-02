@@ -1,7 +1,7 @@
 #ifndef __ZW_COMMON__H__
 #define __ZW_COMMON__H__
 
-#define ZEROWATCH_VER "0.2.5.8"
+#define ZEROWATCH_VER "0.2.5.14"
 #define DEBUG 1
 #define M5STACKC 1
 

@@ -180,17 +180,13 @@ DisplaySpec *zwdisplayInit(String &hostname)
 
     if (retSpec)
     {
-        zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
-        
 #if M5STACKC
-        zlog("M5StickC display init\n");
-        M5.Axp.ScreenBreath(2);
+        dprint("M5StickC display init\n");
         M5.Lcd.setRotation(3);
         M5.Lcd.fillScreen(TFT_BLACK);
-        M5.Lcd.setCursor(0, 0, 2);
-        M5.Lcd.printf("%s v%s\n", gHostname.c_str(), ZEROWATCH_VER);
         M5.Axp.ScreenBreath(gConfig.brightness + 7);
 #else
+        zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
         auto spec = retSpec;
         for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
         {
