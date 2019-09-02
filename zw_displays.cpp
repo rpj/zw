@@ -137,12 +137,16 @@ DisplaySpec gDisplays_ETEST[] = {
     {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
+// pin numbers are just sentinels in M5STACKC definitions: (-1, -1) is the sentinel value
 DisplaySpec gDisplays_M5STICKC[] = {
-    {33, 32, nullptr, {"zero:sensor:BME280:pressure:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
     {18, 19, nullptr, {"zero:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
-    {13, 14, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
     {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
+    {13, 14, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
     {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
+    {18, 19, nullptr, {"zed:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
+    {13, 14, nullptr, {"zed:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
+    {33, 32, nullptr, {"zed:sensor:BME280:pressure:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
+    {26, 25, nullptr, {"zed:sensor:SPS30:mc_2p5:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
 DisplaySpec gDisplays_NULLSPEC[] = {
@@ -185,6 +189,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
         M5.Lcd.fillScreen(TFT_BLACK);
         M5.Lcd.setCursor(0, 0, 2);
         M5.Lcd.printf("%s v%s\n", gHostname.c_str(), ZEROWATCH_VER);
+        M5.Axp.ScreenBreath(gConfig.brightness + 7);
 #else
         auto spec = retSpec;
         for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)

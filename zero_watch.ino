@@ -19,7 +19,7 @@
 
 #define CONTROL_POINT_SEP_CHAR '#'
 #define SER_BAUD 115200
-#define DEF_BRIGHT 0
+#define DEF_BRIGHT 1
 #define CHECKIN_EVERY_X_REFRESH 5
 #define CHECKIN_EXPIRY_MULT 2
 #define HEARTBEAT_EXPIRY_MULT 5
@@ -35,8 +35,7 @@ ZWAppConfig gConfig = {
     .debug = DEBUG,
     .publishLogs = false,
     .pauseRefresh = false,
-    .deepSleepMode = DEEP_SLEEP_MODE_ENABLE
-};
+    .deepSleepMode = DEEP_SLEEP_MODE_ENABLE};
 ZWRedis *gRedis = NULL;
 DisplaySpec *gDisplays = NULL;
 void (*gPublishLogsEmit)(const char *fmt, ...);
@@ -200,7 +199,7 @@ bool processUpdate(String &updateJson, ZWRedisResponder &responder)
             if (runUpdate(fqUrl, md5, szb, preUpdateIRQDisableFunc, []() {
                     if (gRedis->incrementBootcount(true) != 0)
                         zlog("WARNING: unable to reset bootcount!\n");
-                    return gRedis->postCompletedUpdate(); 
+                    return gRedis->postCompletedUpdate();
                 }))
             {
                 zlog("OTA update wrote successfully! Restarting in %d seconds...\n",
@@ -255,7 +254,7 @@ void redis_publish_logs_emit(const char *fmt, ...)
 #define PUB_FMT_STR "{\"source\":\"%s\",\"type\":\"VALUE\",\"ts\":%s,\"value\":{\"logline\":\"%s\"}}"
     auto tickStr = String((unsigned long)gSecondsSinceBoot);
     auto pubLen = strlen(PUB_FMT_STR) + len + gHostname.length() + tickStr.length();
-    char *jbuf = (char*)malloc(pubLen);
+    char *jbuf = (char *)malloc(pubLen);
     bzero(jbuf, pubLen);
     snprintf(jbuf, pubLen, PUB_FMT_STR, gHostname.c_str(), tickStr.c_str(), buf);
     gRedis->publishLog(jbuf);
@@ -288,12 +287,14 @@ void readAndSetTime()
     RTC_TimeTypeDef ts;
     bzero(&ts, sizeof(ts));
     gRedis->getTime(&ts.Hours, &ts.Minutes, &ts.Seconds);
-    if (!(!ts.Hours && !ts.Minutes && !ts.Seconds)) {
+    if (!(!ts.Hours && !ts.Minutes && !ts.Seconds))
+    {
         M5.Rtc.SetTime(&ts);
-        zlog("Set time (from Redis) to %02d:%02d:%02d\n", 
-        ts.Hours, ts.Minutes, ts.Seconds);
+        zlog("Set time (from Redis) to %02d:%02d:%02d\n",
+             ts.Hours, ts.Minutes, ts.Seconds);
     }
-    else {
+    else
+    {
         zlog("Failed to get time from Redis (or it is exactly midnight!)\n");
     }
 }
@@ -335,9 +336,9 @@ void readConfigAndUserKeys()
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(field, extraCond, do {} while (0))
 
 #if M5STACKC
-    UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
+    /*UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
                                                         curCfg.brightness >= 0 && curCfg.brightness < 8,
-                                                        M5.Axp.ScreenBreath(gConfig.brightness + 7));
+                                                        M5.Axp.ScreenBreath(gConfig.brightness + 7));*/
 #else
     UPDATE_IF_CHANGED_ELSE_MARKED_DIRTY_WITH_EXTRAEXTRA(brightness,
                                                         curCfg.brightness >= 0 && curCfg.brightness < 8,
@@ -394,7 +395,7 @@ void heartbeat()
 void zwM5StickC_UpdateBatteryDisplay()
 {
     double vbat = 0.0;
-    int discharge,charge;
+    int discharge, charge;
     double temp = 0.0;
 
     vbat = M5.Axp.GetVbatData() * 1.1 / 1000;
@@ -415,26 +416,28 @@ void zwM5StickC_UpdateBatteryDisplay()
     if (!M5.Axp.GetWarningLeve())
         voltageColor = vbat > 3.9 ? GREEN : (vbat > 3.7 ? YELLOW : ORANGE);
     M5.Lcd.setTextColor(voltageColor, BLACK);
-    M5.Lcd.printf("%.3fV\n",vbat);  //battery voltage
-    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-    
-    M5.Lcd.setTextColor(LIGHTGREY, BLACK);
-    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
+    M5.Lcd.printf("%.3fV\n", vbat); //battery voltage
     M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
 
-    if (charge) {
+    M5.Lcd.setTextColor(LIGHTGREY, BLACK);
+    M5.Lcd.printf("%.1fC\n", temp); //axp192 inside temp
+    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+
+    if (charge)
+    {
         M5.Lcd.setTextColor(GREEN, BLACK);
-        M5.Lcd.printf("%dmA \n",charge);  //battery charging current
+        M5.Lcd.printf("%dmA \n", charge); //battery charging current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
         M5.Lcd.setTextColor(LIGHTGREY, BLACK);
     }
-    if (discharge) {
+    if (discharge)
+    {
         M5.Lcd.setTextColor(ORANGE, BLACK);
-        M5.Lcd.printf("%dmA \n",discharge);  //battery output current
+        M5.Lcd.printf("%dmA \n", discharge); //battery output current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
         M5.Lcd.setTextColor(LIGHTGREY, BLACK);
     }
-    
+
     M5.Rtc.GetBm8563Time();
     M5.Lcd.setCursor(xOff, 65 - 8, 4);
     M5.Lcd.setTextColor(CYAN, BLACK);
@@ -445,6 +448,9 @@ void zwM5StickC_UpdateBatteryDisplay()
 #define zwM5StickC_UpdateBatteryDisplay()
 #endif
 
+#define PAGE_SIZE 4
+static int __dispPage = 0;
+static int __dispPages = 0;
 void tick(bool forceUpdate = false)
 {
     if (gConfig.pauseRefresh)
@@ -459,12 +465,17 @@ void tick(bool forceUpdate = false)
     M5.Lcd.setCursor(0, 0, 2);
 #endif
 
-    for (DisplaySpec *w = gDisplays; w->clockPin != -1 && w->dioPin != -1; w++)
+    for (DisplaySpec *w = (gDisplays + (__dispPage * PAGE_SIZE));
+         (w - (gDisplays + (__dispPage * PAGE_SIZE))) < PAGE_SIZE && (w->clockPin != -1 && w->dioPin != -1);
+         w++)
+    {
         updateDisplay(w);
+    }
 
     _last_free = ESP.getFreeHeap();
 
-    if (gConfig.deepSleepMode) {
+    if (gConfig.deepSleepMode)
+    {
         heartbeat();
         zlog("Deep-sleeping for %ds...\n", gConfig.refresh);
         Serial.flush();
@@ -480,6 +491,8 @@ void IRAM_ATTR __isr()
     portEXIT_CRITICAL(&__isrMutex);
 }
 
+static bool __lastHome = true;
+static bool __lastRst = true;
 void loop()
 {
     if (__isrCount)
@@ -488,12 +501,46 @@ void loop()
         --__isrCount;
         portEXIT_CRITICAL(&__isrMutex);
         ++gSecondsSinceBoot;
-        dprint("%c%s", !(gSecondsSinceBoot % 5) ? '|' : '.', gSecondsSinceBoot % gConfig.refresh ? "" : "\n");
         zwM5StickC_UpdateBatteryDisplay();
     }
 
-    if (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot)
+    auto curHome = digitalRead(M5_BUTTON_HOME);
+    auto curRst = digitalRead(M5_BUTTON_RST);
+    bool forceTick = false;
+
+    if (curHome != __lastHome)
     {
+        if (curHome && !__lastHome)
+        {
+            if (__dispPages)
+            {
+                __dispPage = (__dispPage + 1) % (__dispPages + 1);
+            }
+        }
+
+        forceTick = true;
+    }
+
+    if (curRst != __lastRst)
+    {
+        if (curRst && !__lastRst)
+        {
+            M5.Axp.ScreenBreath((gConfig.brightness = (gConfig.brightness + 1) % 8) + 7);
+        }
+    }
+
+    __lastHome = curHome;
+    __lastRst = curRst;
+
+    if (forceTick || (!(gSecondsSinceBoot % gConfig.refresh) && gLastRefreshTick != gSecondsSinceBoot))
+    {
+        if (forceTick)
+        {
+#if M5STACKC
+            M5.Lcd.fillScreen(TFT_BLACK);
+#endif
+        }
+
         gLastRefreshTick = gSecondsSinceBoot;
         readConfigAndUserKeys();
         tick();
@@ -506,6 +553,7 @@ void setup()
 #if M5STACKC
     M5.begin();
     pinMode(M5_BUTTON_HOME, INPUT_PULLUP);
+    pinMode(M5_BUTTON_RST, INPUT_PULLUP);
     zlog("Built for M5StickC\n");
     gConfig.publishLogs = true;
     gPublishLogsEmit = M5Stack_publish_logs_emit;
@@ -526,8 +574,15 @@ void setup()
         dprint("Display init failed, halting forever\n");
         __haltOrCatchFire();
     }
-    
-    if (!gConfig.deepSleepMode) {
+
+    auto dWalk = gDisplays;
+    for (; dWalk->clockPin != -1 && dWalk->dioPin != -1; dWalk++)
+        ;
+    __dispPages = (int)((dWalk - gDisplays) / PAGE_SIZE) - (!((dWalk - gDisplays) % PAGE_SIZE) ? 1 : 0);
+    zlog("Have %d display pages\n", __dispPages + 1);
+
+    if (!gConfig.deepSleepMode)
+    {
         auto verNum = String(ZEROWATCH_VER);
         verNum.replace(".", "");
         gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
@@ -553,12 +608,12 @@ void setup()
     float redisWaitRetryBackoffMult = 1.37;
 
     int errnos[NUM_RETRIES];
-    while (!gRedis->connect() && --redisConnectRetries) 
+    while (!gRedis->connect() && --redisConnectRetries)
     {
         // seen: ECONNABORTED (makes sense)
         errnos[NUM_RETRIES - (redisConnectRetries + 1)] = errno;
-        zlog("Redis connect failed but %d retries left, waiting %0.2fs and trying again (m=%0.3f)\n", 
-            redisConnectRetries, redisWaitRetryTime, redisWaitRetryBackoffMult);
+        zlog("Redis connect failed but %d retries left, waiting %0.2fs and trying again (m=%0.3f)\n",
+             redisConnectRetries, redisWaitRetryTime, redisWaitRetryBackoffMult);
         redisWaitRetryTime *= redisWaitRetryBackoffMult;
         redisWaitRetryBackoffMult *= redisWaitRetryBackoffMult;
         delay(redisWaitRetryTime);
@@ -575,10 +630,10 @@ void setup()
         String seenErrnos = "";
         for (int i = 0; i < NUM_RETRIES && errnos[i]; i++)
             seenErrnos += String(errnos[i]) + " ";
-        zlog("Redis connection had to be retried %d times. Saw: %s\n", 
-            NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
-        gRedis->logCritical("Redis connection had to be retried %d times. Saw: %s", 
-            NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
+        zlog("Redis connection had to be retried %d times. Saw: %s\n",
+             NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
+        gRedis->logCritical("Redis connection had to be retried %d times. Saw: %s",
+                            NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
     }
 
 #if M5STACKC
@@ -592,7 +647,7 @@ void setup()
     readConfigAndUserKeys();
 
     zlog("Fully initialized! (debug %sabled)\n", gConfig.debug ? "en" : "dis");
-    
+
     if (gConfig.debug && !gConfig.deepSleepMode)
         delay(5000);
 
