@@ -76,9 +76,9 @@ bool processGetValue(String &imEmit, ZWRedisResponder &responder)
     {
         responder.setValue(
             "{ \"version\": \"%s\", \"sketchMD5\": \"%s\", "
-            "\"sketchSize\": %d, \"sdk\": \"%s\", \"chipRev\": %d}",
+            "\"sketchSize\": %d, \"sdk\": \"%s\", \"chipRev\": %d, \"eFuse\": %d}",
             ZEROWATCH_VER, ESP.getSketchMD5().c_str(), ESP.getSketchSize(),
-            ESP.getSdkVersion(), ESP.getChipRevision());
+            ESP.getSdkVersion(), ESP.getChipRevision(), ESP.getEfuseMac());
     }
     else if (imEmit.equals("demo"))
     {
@@ -263,6 +263,26 @@ void redis_publish_logs_emit(const char *fmt, ...)
 }
 
 #if M5STACKC
+void M5Stack_publish_logs_emit(const char *fmt, ...)
+{
+    char buf[1024];
+    bzero(buf, 1024);
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buf, fmt, args);
+    va_end(args);
+
+    auto len = strlen(buf);
+
+    if (buf[len - 1] == '\n')
+        buf[len - 1] = '\0';
+
+    M5.Lcd.println(buf);
+    Serial.println(buf);
+}
+#endif
+
+#if M5STACKC
 void readAndSetTime()
 {
     RTC_TimeTypeDef ts;
@@ -284,6 +304,8 @@ void readAndSetTime()
 
 void readConfigAndUserKeys()
 {
+    readAndSetTime();
+
     auto curCfg = gRedis->readConfig();
     bool dirty = false;
 
@@ -368,8 +390,6 @@ void heartbeat()
     }
 }
 
-#define R_GREY 0xc618
-#define R_DGREY 0x7bef
 #if M5STACKC
 void zwM5StickC_UpdateBatteryDisplay()
 {
@@ -382,40 +402,43 @@ void zwM5StickC_UpdateBatteryDisplay()
     discharge = M5.Axp.GetIdischargeData() / 2;
     temp = -144.7 + M5.Axp.GetTempData() * 0.1;
 
-    const int xOff = 100;
+    const int xOff = 94;
     const int yIncr = 16;
     const int battFont = 2;
     int yOff = 0;
 
-    M5.Lcd.setTextColor(R_GREY, BLACK);
-    M5.Lcd.drawLine(xOff - 7, yOff, xOff - 7, yOff + 80, R_DGREY);
+    M5.Lcd.setTextColor(LIGHTGREY, BLACK);
+    M5.Lcd.drawLine(xOff - 6, yOff, xOff - 6, yOff + 80, DARKCYAN);
     M5.Lcd.setCursor(xOff, yOff, battFont);
 
-    if (M5.Axp.GetWarningLeve())
-        M5.Lcd.setTextColor(RED, BLACK);
+    uint16_t voltageColor = RED;
+    if (!M5.Axp.GetWarningLeve())
+        voltageColor = vbat > 3.9 ? GREEN : (vbat > 3.7 ? YELLOW : ORANGE);
+    M5.Lcd.setTextColor(voltageColor, BLACK);
     M5.Lcd.printf("%.3fV\n",vbat);  //battery voltage
     M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+    
+    M5.Lcd.setTextColor(LIGHTGREY, BLACK);
+    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
+    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
+
     if (charge) {
         M5.Lcd.setTextColor(GREEN, BLACK);
         M5.Lcd.printf("%dmA \n",charge);  //battery charging current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-        M5.Lcd.setTextColor(R_GREY, BLACK);
+        M5.Lcd.setTextColor(LIGHTGREY, BLACK);
     }
     if (discharge) {
-        M5.Lcd.setTextColor(YELLOW, BLACK);
+        M5.Lcd.setTextColor(ORANGE, BLACK);
         M5.Lcd.printf("%dmA \n",discharge);  //battery output current
         M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-        M5.Lcd.setTextColor(R_GREY, BLACK);
+        M5.Lcd.setTextColor(LIGHTGREY, BLACK);
     }
     
-    M5.Lcd.setTextColor(R_GREY, BLACK);
-    M5.Lcd.printf("%.1fC\n",temp);  //axp192 inside temp
-    M5.Lcd.setCursor(xOff, yOff += yIncr, battFont);
-    
     M5.Rtc.GetBm8563Time();
-    M5.Lcd.setCursor(xOff, 65, 2);
+    M5.Lcd.setCursor(xOff, 65 - 8, 4);
     M5.Lcd.setTextColor(CYAN, BLACK);
-    M5.Lcd.printf("%02d:%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute, M5.Rtc.Second);
+    M5.Lcd.printf("%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute);
     M5.Lcd.setTextColor(WHITE, BLACK);
 }
 #else
@@ -484,6 +507,8 @@ void setup()
     M5.begin();
     pinMode(M5_BUTTON_HOME, INPUT_PULLUP);
     zlog("Built for M5StickC\n");
+    gConfig.publishLogs = true;
+    gPublishLogsEmit = M5Stack_publish_logs_emit;
 #else
     pinMode(LED_BLTIN, OUTPUT);
     Serial.begin(SER_BAUD);
@@ -556,9 +581,13 @@ void setup()
             NUM_RETRIES - redisConnectRetries, seenErrnos.c_str());
     }
 
-    zlog("Redis connection established, reading config...\n");
+#if M5STACKC
+    delay(5000);
+    gConfig.publishLogs = false;
+    gPublishLogsEmit = NULL;
+#endif
 
-    readAndSetTime();
+    zlog("Redis connection established, reading config...\n");
 
     readConfigAndUserKeys();
 

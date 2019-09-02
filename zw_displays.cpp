@@ -1,6 +1,7 @@
 #include "zw_displays.h"
 #include "zw_logging.h"
 #include "zw_common.h"
+#include "zw_provision.h"
 
 // TODO: get rid of these externs! (and associated includes!)
 extern unsigned long immediateLatency;
@@ -70,8 +71,10 @@ int noop(int a) { return a; }
 void d_def(DisplaySpec *d) 
 { 
 #if M5STACKC
-    M5.Lcd.printf("%s: %d\n", getDispSpecShortName(d).c_str(), 
-        d->spec.lastVal);
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecShortName(d).c_str());
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.printf("%d\n", d->spec.lastVal);
 #else
     d->disp->showNumberDec(d->spec.lastVal); 
 #endif
@@ -80,8 +83,15 @@ void d_def(DisplaySpec *d)
 void d_tempf(DisplaySpec *d)
 {
 #if M5STACKC
-    M5.Lcd.printf("%s: %.1fF\n", getDispSpecSensorName(d).c_str(), 
-        (float)d->spec.lastVal / 100.0);
+    float curVal = d->spec.lastVal / 100.0;
+    uint16_t tempColor = curVal > 100 ? RED : (curVal > 95.0 ? ORANGE : 
+        (curVal > 85.0 ? YELLOW : (curVal > 65.0 ? GREEN : 
+        (curVal > 55.0 ? CYAN : (curVal > 40.0 ? BLUE : PURPLE)))));
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecSensorName(d).c_str());
+    M5.Lcd.setTextColor(tempColor, BLACK);
+    M5.Lcd.printf("%.1fF\n", curVal);
+    M5.Lcd.setTextColor(WHITE, BLACK);
 #else
     if (d->spec.lastVal < 10000)
     {
@@ -99,8 +109,10 @@ void d_tempf(DisplaySpec *d)
 void d_humidPercent(DisplaySpec *d)
 {
 #if M5STACKC
-    M5.Lcd.printf("%s: %.1f%%\n", getDispSpecSensorName(d).c_str(), 
-        (float)d->spec.lastVal / 100.0);
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecSensorName(d).c_str());
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.printf("%.1f%%\n", (float)d->spec.lastVal / 100.0);
 #else
     d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
     d->disp->setSegments(prcntSeg, 2, 2);
@@ -164,16 +176,17 @@ DisplaySpec *zwdisplayInit(String &hostname)
 
     if (retSpec)
     {
-        auto spec = retSpec;
         zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
         
 #if M5STACKC
         zlog("M5StickC display init\n");
-        M5.Axp.ScreenBreath(gConfig.brightness + 7);
+        M5.Axp.ScreenBreath(2);
         M5.Lcd.setRotation(3);
         M5.Lcd.fillScreen(TFT_BLACK);
         M5.Lcd.setCursor(0, 0, 2);
+        M5.Lcd.printf("%s v%s\n", gHostname.c_str(), ZEROWATCH_VER);
 #else
+        auto spec = retSpec;
         for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
         {
             zlog("Setting up display #%d with clock=%d DIO=%d\n",
@@ -184,7 +197,6 @@ DisplaySpec *zwdisplayInit(String &hostname)
             spec->disp->setBrightness(gConfig.brightness);
             __runAnimation(spec->disp, full_loop, false, 5);
         }
-#endif
 
         if (gConfig.debug && !gConfig.deepSleepMode)
         {
@@ -192,6 +204,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
                                                     false, 4 - (int)(walk - retSpec), (int)(walk - retSpec)));
             delay(2000);
         }
+#endif
     }
 
     return retSpec;

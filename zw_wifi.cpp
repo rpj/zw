@@ -5,7 +5,7 @@
 
 bool zwWiFiInit(const char *hostname, ZWAppConfig config)
 {
-    dprint("Disabling WiFi AP\n");
+    zlog("Disabling WiFi AP\n");
     WiFi.mode(WIFI_MODE_STA);
     WiFi.enableAP(false);
 
@@ -15,8 +15,8 @@ bool zwWiFiInit(const char *hostname, ZWAppConfig config)
     }
 
     auto bstat = WiFi.begin(EEPROMCFG_WiFiSSID, EEPROMCFG_WiFiPass);
-    dprint("Connecting to to '%s'...\n", EEPROMCFG_WiFiSSID);
-    dprint("WiFi.begin() -> %d\n", bstat);
+    zlog("Connecting to to '%s'...\n", EEPROMCFG_WiFiSSID);
+    zlog("WiFi.begin() -> %d\n", bstat);
 
     // TODO: timeout!
     while (WiFi.status() != WL_CONNECTED) {}
