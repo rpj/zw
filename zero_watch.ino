@@ -391,6 +391,53 @@ void heartbeat()
 }
 
 #if M5STACKC
+int xLineOff = 148;
+int yLineOffTop = 5;
+int yLineOffBot = 31;
+auto brightLvl = gConfig.brightness * 3;
+auto borderClr = DARKGREY;
+auto barClr = DARKCYAN;
+
+uint16_t brightIcon[8][6] = {
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+    { DARKGREY, DARKGREY, DARKGREY, DARKGREY, DARKGREY, DARKGREY },
+    { DARKGREY, DARKGREY, DARKGREY, DARKGREY, DARKGREY, DARKGREY },
+    { LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY },
+    { LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY, LIGHTGREY },
+    { WHITE, WHITE, WHITE, WHITE, WHITE, WHITE },
+    { WHITE, WHITE, WHITE, WHITE, WHITE, WHITE }
+};
+
+void zwM5StickC_DrawBitmap(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint16_t* bitmap)
+{
+    for (int x_w = x; x_w < (x + w); x_w++) {
+        for (int y_w = y; y_w < (y + h); y_w++) {
+            M5.Lcd.drawPixel(x_w + x, y_w + y, *((bitmap + (x_w - x) * h) + (y_w - y)));
+        }
+    }
+}
+
+void zwM5StickC_DrawBrightnessMeterBorder()
+{
+    M5.Lcd.drawLine(xLineOff,   yLineOffTop, xLineOff+5, yLineOffTop, borderClr);
+    M5.Lcd.drawLine(xLineOff,   yLineOffBot, xLineOff+5, yLineOffBot, borderClr);
+    M5.Lcd.drawLine(xLineOff,   yLineOffTop, xLineOff,   yLineOffBot, borderClr);
+    M5.Lcd.drawLine(xLineOff+5, yLineOffTop, xLineOff+5, yLineOffBot, borderClr);
+    //zwM5StickC_DrawBitmap(xLineOff-2, yLineOffBot+2, 8, 8, (uint16_t*)brightIcon);
+}
+
+void zwM5StickC_UpdateBrightnessMeter()
+{
+    auto brightLvl = gConfig.brightness * 3;
+    M5.Lcd.drawLine(xLineOff+2, yLineOffTop+1, xLineOff+2, yLineOffBot-1, BLACK);
+    M5.Lcd.drawLine(xLineOff+3, yLineOffTop+1, xLineOff+3, yLineOffBot-1, BLACK);
+    auto tmpY = yLineOffBot - 2;
+    M5.Lcd.drawLine(xLineOff+2, tmpY - brightLvl, xLineOff+2, tmpY, barClr);
+    M5.Lcd.drawLine(xLineOff+3, tmpY - brightLvl, xLineOff+3, tmpY, barClr);
+    zwM5StickC_DrawBrightnessMeterBorder();
+}
+
 void zwM5StickC_UpdateBatteryDisplay()
 {
     double vbat = 0.0;
@@ -408,6 +455,7 @@ void zwM5StickC_UpdateBatteryDisplay()
     int yOff = 0;
 
     M5.Lcd.setTextColor(LIGHTGREY, BLACK);
+    M5.Lcd.drawLine(xOff - 8, yOff, xOff - 8, yOff + 80, DARKCYAN);
     M5.Lcd.drawLine(xOff - 6, yOff, xOff - 6, yOff + 80, DARKCYAN);
     M5.Lcd.setCursor(xOff, yOff, battFont);
 
@@ -440,23 +488,21 @@ void zwM5StickC_UpdateBatteryDisplay()
     M5.Rtc.GetBm8563Time();
     M5.Lcd.setCursor(xOff, 65 - 8, 4);
     M5.Lcd.setTextColor(CYAN, BLACK);
-    M5.Lcd.printf("%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute);
+    M5.Lcd.printf("%02d:%02d\n", M5.Rtc.Hour % 12, M5.Rtc.Minute);
     M5.Lcd.setTextColor(WHITE, BLACK);
 
-    // brightness line
-    auto brightLvl = 8 - gConfig.brightness;
-    M5.Lcd.drawLine(140, 10, 140, 30, DARKCYAN);
-    M5.Lcd.drawLine(142, 10, 142, 30, CYAN);
-    M5.Lcd.drawLine(143, 10, 143, 30, CYAN);
-    M5.Lcd.drawLine(145, 10, 145, 30, DARKCYAN);
+    zwM5StickC_UpdateBrightnessMeter();
 }
 #else
+#define zwM5StickC_UpdateBrightnessMeter()
+#define zwM5StickC_DrawBrightnessMeterBorder()
 #define zwM5StickC_UpdateBatteryDisplay()
 #endif
 
 #define PAGE_SIZE 4
 static int __dispPage = 0;
 static int __dispPages = 0;
+
 void tick(bool forceUpdate = false)
 {
     if (gConfig.pauseRefresh)
@@ -473,10 +519,13 @@ void tick(bool forceUpdate = false)
 
     for (DisplaySpec *w = (gDisplays + (__dispPage * PAGE_SIZE));
          (w - (gDisplays + (__dispPage * PAGE_SIZE))) < PAGE_SIZE && (w->clockPin != -1 && w->dioPin != -1);
-         w++)
-    {
-        updateDisplay(w);
-    }
+         w++) 
+            updateDisplay(w);
+
+#if M5STACKC
+    M5.Lcd.setTextColor(NAVY, BLACK);
+    M5.Lcd.printf("          <%d>\n", __dispPage + 1);
+#endif
 
     _last_free = ESP.getFreeHeap();
 
@@ -499,6 +548,7 @@ void IRAM_ATTR __isr()
 
 static bool __lastHome = true;
 static bool __lastRst = true;
+static uint64_t __rstDebounce = 0;
 void loop()
 {
     if (__isrCount)
@@ -529,9 +579,11 @@ void loop()
 
     if (curRst != __lastRst)
     {
-        if (curRst && !__lastRst)
+        if (curRst && !__lastRst && (!__rstDebounce || (millis() - __rstDebounce > 250)))
         {
+            __rstDebounce = millis();
             M5.Axp.ScreenBreath((gConfig.brightness = (gConfig.brightness + 1) % 8) + 7);
+            zwM5StickC_UpdateBrightnessMeter();
         }
     }
 
@@ -576,23 +628,29 @@ void setup()
         __haltOrCatchFire();
     }
 
+    auto buildVariant = "";
 #if M5STACKC
+    buildVariant = "-M5SC";
     M5.Lcd.setCursor(0, 0, 1);
+
+    //zwM5StickC_DrawBitmap(10, 10, 8, 8, (uint16_t*)brightIcon);
+    //delay(120000);
 #endif
 
-    zlog("%s v" ZEROWATCH_VER "\n", gHostname.c_str());
+    zlog("%s v" ZEROWATCH_VER "%s\n", gHostname.c_str(), buildVariant);
 
     auto dWalk = gDisplays;
-    for (; dWalk->clockPin != -1 && dWalk->dioPin != -1; dWalk++)
-        ;
+    for (; dWalk->clockPin != -1 && dWalk->dioPin != -1; dWalk++);
     __dispPages = (int)((dWalk - gDisplays) / PAGE_SIZE) - (!((dWalk - gDisplays) % PAGE_SIZE) ? 1 : 0);
 
     if (!gConfig.deepSleepMode)
     {
+#if !M5STACKC
         auto verNum = String(ZEROWATCH_VER);
         verNum.replace(".", "");
         gDisplays[0].disp->showNumberDec(verNum.toInt(), true);
         delay(2000);
+#endif
     }
 
     if (!zwWiFiInit(gHostname.c_str(), gConfig))
@@ -658,7 +716,7 @@ void setup()
     timerAlarmEnable(__isrTimer);
 
 #if M5STACKC
-    delay(gConfig.debug ? 10000 : 1000);
+    delay(gConfig.debug ? 10000 : 2000);
     gPublishLogsEmit = NULL;
     M5.Lcd.setCursor(0, 0, 2);
     M5.Lcd.fillScreen(TFT_BLACK);
