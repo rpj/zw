@@ -1,6 +1,7 @@
 #include "zw_displays.h"
 #include "zw_logging.h"
 #include "zw_common.h"
+#include "zw_provision.h"
 
 // TODO: get rid of these externs! (and associated includes!)
 extern unsigned long immediateLatency;
@@ -38,16 +39,60 @@ void __runAnimation(TM1637Display *d, AnimStep *anim, bool cE = false, int s = 0
     }
 }
 
+String __dispSpecNameComp(DisplaySpec* d, int cLimit, int lenLimit = 4)
+{
+    auto sName = String(d->spec.listKey);
+    sName.replace(":.list", "");
+    auto cIdx = -1;
+    for (int i = 0; i < cLimit; i++)
+        cIdx = sName.indexOf(":", cIdx + 1);
+    auto retVal = sName.substring(cIdx + 1);
+    if (retVal.length() > lenLimit)
+        retVal = retVal.substring(0, lenLimit);
+    return retVal;
+}
+
+String getDispSpecShortName(DisplaySpec* d)
+{
+    return __dispSpecNameComp(d, 3);
+}
+
+String getDispSpecSensorName(DisplaySpec* d)
+{
+    return __dispSpecNameComp(d, 2, 3);
+}
+
 static uint8_t degFSegs[] = {99, 113};
 static uint8_t fSeg[] = {113};
 static uint8_t prcntSeg[] = {99, 92};
 
 int noop(int a) { return a; }
 
-void d_def(DisplaySpec *d) { d->disp->showNumberDec(d->spec.lastVal); }
+void d_def(DisplaySpec *d) 
+{ 
+#if M5STACKC
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecShortName(d).c_str());
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.printf("%d\n", d->spec.lastVal);
+#else
+    d->disp->showNumberDec(d->spec.lastVal); 
+#endif
+}
 
 void d_tempf(DisplaySpec *d)
 {
+#if M5STACKC
+    float curVal = d->spec.lastVal / 100.0;
+    uint16_t tempColor = curVal > 100 ? RED : (curVal > 95.0 ? ORANGE : 
+        (curVal > 85.0 ? YELLOW : (curVal > 65.0 ? GREEN : 
+        (curVal > 55.0 ? CYAN : (curVal > 40.0 ? BLUE : PURPLE)))));
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecSensorName(d).c_str());
+    M5.Lcd.setTextColor(tempColor, BLACK);
+    M5.Lcd.printf("%.1fF\n", curVal);
+    M5.Lcd.setTextColor(WHITE, BLACK);
+#else
     if (d->spec.lastVal < 10000)
     {
         d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
@@ -58,12 +103,20 @@ void d_tempf(DisplaySpec *d)
         d->disp->showNumberDecEx(d->spec.lastVal / 100, 0, false, 3);
         d->disp->setSegments(fSeg, 1, 3);
     }
+#endif
 }
 
 void d_humidPercent(DisplaySpec *d)
 {
+#if M5STACKC
+    M5.Lcd.setTextColor(DARKGREY, BLACK);
+    M5.Lcd.printf("%s:  ", getDispSpecSensorName(d).c_str());
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.printf("%.1f%%\n", (float)d->spec.lastVal / 100.0);
+#else
     d->disp->showNumberDecEx(d->spec.lastVal, 0, false);
     d->disp->setSegments(prcntSeg, 2, 2);
+#endif
 }
 
 DisplaySpec gDisplays_AMINI[] = {
@@ -82,6 +135,18 @@ DisplaySpec gDisplays_EZERO[] = {
 DisplaySpec gDisplays_ETEST[] = {
     {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
     {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
+    {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
+
+// pin numbers are just sentinels in M5STACKC definitions: (-1, -1) is the sentinel value
+DisplaySpec gDisplays_M5STICKC[] = {
+    {18, 19, nullptr, {"zero:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
+    {26, 25, nullptr, {"zero:sensor:DHTXX:temperature_fahrenheit:.list", 0, 11, 0.0, 0,  noop, d_tempf}},
+    {13, 14, nullptr, {"zero:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
+    {33, 32, nullptr, {"zero:sensor:DHTXX:relative_humidity:.list", 0, 5, 0.0, 0, noop, d_humidPercent}},
+    {18, 19, nullptr, {"zed:sensor:BME280:temperature:.list", 0, 11, 0.0, 0, noop, d_tempf}},
+    {13, 14, nullptr, {"zed:sensor:BME280:humidity:.list", 0, 11, 0.0, 0, noop, d_humidPercent}},
+    {33, 32, nullptr, {"zed:sensor:BME280:pressure:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
+    {26, 25, nullptr, {"zed:sensor:SPS30:mc_2p5:.list", 0, 5, 0.0, 0, [](int i) { return i / 100; }, d_def}},
     {-1, -1, nullptr, {nullptr, -1, -1, -1.0, -1, noop, d_def}}};
 
 DisplaySpec gDisplays_NULLSPEC[] = {
@@ -104,6 +169,10 @@ DisplaySpec *zwdisplayInit(String &hostname)
     {
         retSpec = gDisplays_ETEST;
     }
+    else if (hostname.startsWith("stack")) 
+    {
+        retSpec = gDisplays_M5STICKC;
+    }
     else 
     {
         retSpec = gDisplays_NULLSPEC;
@@ -111,8 +180,14 @@ DisplaySpec *zwdisplayInit(String &hostname)
 
     if (retSpec)
     {
-        auto spec = retSpec;
+#if M5STACKC
+        dprint("M5StickC display init\n");
+        M5.Lcd.setRotation(3);
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Axp.ScreenBreath(gConfig.brightness + 7);
+#else
         zlog("Initializing displays with brightness level %d\n", gConfig.brightness);
+        auto spec = retSpec;
         for (; spec->clockPin != -1 && spec->dioPin != -1; spec++)
         {
             zlog("Setting up display #%d with clock=%d DIO=%d\n",
@@ -130,6 +205,7 @@ DisplaySpec *zwdisplayInit(String &hostname)
                                                     false, 4 - (int)(walk - retSpec), (int)(walk - retSpec)));
             delay(2000);
         }
+#endif
     }
 
     return retSpec;
